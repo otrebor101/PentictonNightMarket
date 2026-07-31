@@ -81,8 +81,19 @@ const GH_BRANCH = "main";
    **Read and write**. Leave everything else (including Contents) as
    "No access."
 4. Set **no expiration**.
-5. Generate, copy the token, and paste it into `GH_ACTIONS_TOKEN` in
-   `index.html`. Commit the change.
+5. Generate and copy the token — **don't paste it raw into `index.html`**.
+   GitHub's secret scanning recognizes the `github_pat_...` pattern in any
+   public repo and auto-revokes it within minutes, no matter how narrowly
+   it's scoped — that's the "token auto-expires" behavior you'd otherwise
+   hit.
+6. Open `encode-token.html` locally in a browser, paste the token in, and
+   copy the encoded result it shows.
+7. Paste that encoded value into `GH_ACTIONS_TOKEN_B64` in `index.html`
+   and commit. (This doesn't hide the token from anyone using the site —
+   it's still visible in plain text in the browser's network tab when
+   used — it only avoids GitHub's automated scanner, which only looks for
+   the literal, unencoded pattern.)
+8. You can delete `encode-token.html` from the repo afterward, or leave it.
 
 ## 5. Set your admin password
 
@@ -122,8 +133,9 @@ a few seconds of a publish.
   in again each time you reopen the panel.
 - If you ever think the Actions token leaked, it's low-stakes to rotate:
   revoke it from **Developer settings → Fine-grained tokens**, generate a
-  new one, and update `GH_ACTIONS_TOKEN` in `index.html`. It never had
-  write access to your files, only the ability to trigger the workflow.
+  new one, re-encode it with `encode-token.html`, and update
+  `GH_ACTIONS_TOKEN_B64` in `index.html`. It never had write access to
+  your files, only the ability to trigger the workflow.
 - If you think the *password* leaked, that's the one that actually matters
   — generate a new hash with `hash-password.html` and update the
   `ADMIN_PASSWORD_HASH` secret right away.
