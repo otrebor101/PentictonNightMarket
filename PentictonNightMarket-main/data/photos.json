@@ -1,0 +1,7 @@
+[
+  { "id": "p1", "src": "market-stalls.jpg", "caption": "the stalls light up", "rot": -4 },
+  { "id": "p2", "src": "red-tents.jpg", "caption": "the crowd rolls in ~7pm", "rot": 3 },
+  { "id": "p3", "src": "blue-tent-crafts.jpg", "caption": "market night, as always", "rot": -2 },
+  { "id": "p4", "src": "lit-trees.jpg", "caption": "summer air, lake breeze", "rot": 5 },
+  { "id": "p5", "src": "string-lights.jpg", "caption": "bandshell lights up", "rot": -3 }
+]
