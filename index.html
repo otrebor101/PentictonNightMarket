@@ -561,6 +561,32 @@
     font-weight:700;font-size:0.75rem;white-space:nowrap;
   }
   .admin-empty{font-size:0.85rem;color:rgba(32,41,31,0.5);font-style:italic;}
+  .photo-editor-list{display:flex;flex-direction:column;gap:10px;margin-bottom:12px;}
+  .photo-editor-row{
+    display:grid;grid-template-columns:52px 1fr auto;gap:10px;align-items:center;
+    background:rgba(240,161,92,0.1);border:1px solid rgba(240,161,92,0.28);
+    border-radius:4px;padding:10px;
+  }
+  .photo-editor-row img{width:52px;height:52px;object-fit:cover;border-radius:3px;background:var(--dusk-navy-deep);}
+  .photo-editor-fields{display:flex;flex-direction:column;gap:6px;}
+  .photo-editor-fields select, .photo-editor-fields input{
+    width:100%;padding:7px 9px;border:1.5px solid rgba(32,41,31,0.18);
+    border-radius:3px;font-family:'Work Sans',sans-serif;font-size:0.85rem;background:#fff;
+  }
+  .photo-editor-actions{display:flex;flex-direction:column;gap:4px;align-items:flex-end;}
+  .photo-editor-actions button{
+    background:none;border:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;
+    text-transform:uppercase;letter-spacing:0.05em;font-weight:700;font-size:0.7rem;
+    color:var(--lake-teal);padding:2px 0;white-space:nowrap;
+  }
+  .photo-editor-actions button.remove{color:var(--peach-coral);}
+  .photo-editor-actions button:disabled{opacity:0.35;cursor:default;}
+  .btn-ghost-add{
+    border:1.5px dashed rgba(47,110,107,0.5);color:var(--lake-teal);background:none;
+    padding:9px 14px;border-radius:3px;font-weight:600;cursor:pointer;width:100%;
+    font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:0.06em;font-size:0.8rem;
+  }
+  .btn-ghost-add:hover{background:rgba(47,110,107,0.08);}
   .divider-line{border:none;border-top:1px solid rgba(32,41,31,0.14);margin:22px 0;}
   .btn-danger-ghost{
     border:1.5px solid rgba(228,103,75,0.5);color:var(--peach-coral);
@@ -614,41 +640,7 @@
       </div>
     </div>
     <div class="hero-photo-stack" id="polaroidStack">
-      <div class="polaroid" style="--rot:-4deg">
-        <span class="tape t-left"></span><span class="tape t-right"></span>
-        <div class="polaroid-photo">
-          <img src="images/market-stalls.jpg" alt="Shoppers browsing colourful vendor tents at the Penticton Night Market at Gyro Park">
-        </div>
-        <div class="polaroid-cap">the stalls light up</div>
-      </div>
-      <div class="polaroid" style="--rot:3deg">
-        <span class="tape t-left"></span><span class="tape t-right"></span>
-        <div class="polaroid-photo">
-          <img src="images/red-tents.jpg" alt="Vendor tents and market crowd at the Penticton Night Market, Gyro Park">
-        </div>
-        <div class="polaroid-cap">the crowd rolls in ~7pm</div>
-      </div>
-      <div class="polaroid" style="--rot:-2deg">
-        <span class="tape t-left"></span><span class="tape t-right"></span>
-        <div class="polaroid-photo">
-          <img src="images/blue-tent-crafts.jpg" alt="Market-goers browsing a local craft vendor's stall at dusk at Gyro Park">
-        </div>
-        <div class="polaroid-cap">market night, as always</div>
-      </div>
-      <div class="polaroid" style="--rot:5deg">
-        <span class="tape t-left"></span><span class="tape t-right"></span>
-        <div class="polaroid-photo">
-          <img src="images/lit-trees.jpg" alt="Trees strung with warm lights over the park at the Penticton Night Market">
-        </div>
-        <div class="polaroid-cap">summer air, lake breeze</div>
-      </div>
-      <div class="polaroid" style="--rot:-3deg">
-        <span class="tape t-left"></span><span class="tape t-right"></span>
-        <div class="polaroid-photo">
-          <img src="images/string-lights.jpg" alt="String lights glowing over Gyro Park after sunset">
-        </div>
-        <div class="polaroid-cap">bandshell lights up</div>
-      </div>
+      <!-- populated by JS from data/photos.json -->
     </div>
   </div>
   <svg class="peach-divider" viewBox="0 0 1200 64" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
@@ -844,11 +836,11 @@
   <div class="modal-box">
     <button class="modal-close" id="loginCloseBtn" aria-label="Close">&times;</button>
     <h3>Admin login</h3>
-    <p class="modal-sub">Manage the market updates banner shown at the top of the site. Publishing writes directly to the site's GitHub repo — paste in a GitHub personal access token scoped to that repo.</p>
+    <p class="modal-sub">Manage the market updates banner and photo stack. Changes are made by a GitHub Action running on GitHub's servers &mdash; enter the admin password to authorize a change.</p>
     <form id="loginForm">
       <div class="field">
-        <label for="adminPass">GitHub personal access token</label>
-        <input type="password" id="adminPass" autocomplete="off" placeholder="github_pat_...">
+        <label for="adminPass">Admin password</label>
+        <input type="password" id="adminPass" autocomplete="off" placeholder="Admin password">
       </div>
       <div class="modal-error" id="loginError"></div>
       <button type="submit" class="btn-primary btn-block">Log in</button>
@@ -877,6 +869,17 @@
       <div class="modal-error" id="updateFormError"></div>
       <button type="submit" class="btn-primary btn-block">Publish update</button>
     </form>
+
+    <hr class="divider-line">
+
+    <h3 style="font-size:1.1rem;">Photo stack</h3>
+    <p class="modal-sub" style="margin-bottom:14px;">The rotating photos in the hero. Reorder, edit captions, remove, or swap in a different photo &mdash; to use a brand-new image, upload it into the repo's <code>images/</code> folder first, then it'll show up in the dropdown here.</p>
+
+    <div class="photo-editor-list" id="photoEditorList"></div>
+    <button type="button" class="btn-ghost-add" id="addPhotoBtn">+ Add photo to stack</button>
+
+    <div class="modal-error" id="photoFormError"></div>
+    <button type="button" class="btn-primary btn-block" id="savePhotosBtn" style="margin-top:14px;">Save photo stack</button>
   </div>
 </div>
 
@@ -890,7 +893,11 @@
 </script>
 
 <script>
-  (function(){
+  let polaroidCycleTimer = null;
+
+  function initPolaroidCycle(){
+    if(polaroidCycleTimer){ clearInterval(polaroidCycleTimer); polaroidCycleTimer = null; }
+
     const items = Array.from(document.querySelectorAll('#polaroidStack .polaroid'));
     if(!items.length) return;
 
@@ -921,63 +928,100 @@
       current = next;
     }
 
-    setInterval(cycle, DWELL);
-  })();
+    polaroidCycleTimer = setInterval(cycle, DWELL);
+  }
 </script>
 
 <script>
 (function(){
   // ================= CONFIG =================
-  // Fill these in once you've created the repo/file (see README notes below).
+  // Fill these in once you've created the repo (see README).
   // The repo must be PUBLIC so the raw JSON can be read without a token.
-  const GH_OWNER  = "otrebor101";      //GITHUB USERNAME e.g. "pentictonnightmarket"
-  const GH_REPO   = "PentictonNightMarket";            //REPO NAME e.g. "night-market-site"
+  const GH_OWNER  = "otrebor101";      // GITHUB USERNAME
+  const GH_REPO   = "PentictonNightMarket"; // REPO NAME
   const GH_BRANCH = "main";
-  const GH_PATH   = "data/market-updates.json";  // JSON array lives here
+  const GH_UPDATES_PATH  = "data/market-updates.json";
+  const GH_PHOTOS_PATH   = "data/photos.json";
+  const GH_IMAGES_DIR    = "images";
+  const GH_WORKFLOW_FILE = "admin-update.yml"; // filename under .github/workflows/
 
   // ------------------------------------------
   // HOW THIS WORKS (zero servers of your own):
-  // - Every visitor's browser reads the updates straight from the raw file
-  //   on GitHub — no auth needed for that, it's a public GET.
-  // - The admin panel writes changes back using the GitHub REST API, which
-  //   supports CORS, so a plain browser fetch() works with no proxy.
-  // - Publishing needs a GitHub Personal Access Token, entered at login.
-  //   It is NEVER stored anywhere (not in this file, not in localStorage) —
-  //   just held in memory for the current tab and forgotten on reload.
+  // - Every visitor's browser reads the updates + photo stack straight from the
+  //   raw files on GitHub — no auth needed for that, it's a public GET.
+  // - The admin panel never writes to the repo directly. Instead it triggers a
+  //   GitHub Actions workflow (.github/workflows/admin-update.yml), which runs
+  //   on GitHub's own servers and does the actual file edit + commit. That
+  //   removes the client-side "sha does not match" race entirely, since the
+  //   workflow always starts from a fresh checkout and runs are serialized.
+  // - The token below authorizes the *trigger* call only. It is a fine-grained
+  //   GitHub PAT scoped to ONLY this repo, with ONLY the "Actions: Read and
+  //   write" permission — it cannot read or write any file directly, so it is
+  //   safe to leave visible in this public file. It is intentionally set to
+  //   never expire so nobody has to keep re-pasting a code.
+  // - The real gate against anyone but you making changes is the ADMIN
+  //   PASSWORD, entered at login. It is hashed (SHA-256) in the browser and
+  //   compared against a secret on GitHub's side, inside the workflow run —
+  //   the plain password is never sent anywhere and never appears in this
+  //   file or in any log, even though the repo (and its Action run history)
+  //   is public.
   //
-  // ONE-TIME SETUP:
-  //   1. Create (or use) a public GitHub repo.
-  //   2. Add a file at data/market-updates.json containing: []
-  //   3. GitHub → Settings → Developer settings → Fine-grained tokens →
-  //      Generate new token, scoped ONLY to this repo, with
-  //      "Contents: Read and write" permission and nothing else.
-  //   4. Fill in GH_OWNER / GH_REPO above.
-  //   5. When you (the admin) click "Admin", paste that token in as the
-  //      "password". Keep it somewhere safe like a password manager —
-  //      GitHub only shows it once.
+  // ONE-TIME SETUP — see README for the full walkthrough:
+  //   1. Push this repo to GitHub, turn on Pages.
+  //   2. Fill in GH_OWNER / GH_REPO above.
+  //   3. Create a fine-grained PAT scoped to ONLY this repo, ONLY
+  //      "Actions: Read and write" permission, no expiration. Paste it
+  //      into GH_ACTIONS_TOKEN below and commit.
+  //   4. Repo → Settings → Secrets and variables → Actions → New repository
+  //      secret named ADMIN_PASSWORD_HASH, containing the SHA-256 hex
+  //      digest of whatever password you want to log in with. The login
+  //      screen (browser console) can compute this for you, or use any
+  //      "sha256 hex" tool — see README.
   // ================= END CONFIG =================
+
+  const GH_ACTIONS_TOKEN = "github_pat_PASTE-YOUR-ACTIONS-ONLY-TOKEN-HERE";
 
   const DEFAULT_UPDATES = [
     { id: "default-1", text: "No market on Aug 6 for Peach Fest, and no market on June 26 for the Peach City Beach Cruise. Check Instagram the afternoon of each market for weather or air-quality calls." }
   ];
+  const DEFAULT_PHOTOS = [
+    { id: "p1", src: "market-stalls.jpg", caption: "the stalls light up", rot: -4 },
+    { id: "p2", src: "red-tents.jpg", caption: "the crowd rolls in ~7pm", rot: 3 },
+    { id: "p3", src: "blue-tent-crafts.jpg", caption: "market night, as always", rot: -2 },
+    { id: "p4", src: "lit-trees.jpg", caption: "summer air, lake breeze", rot: 5 },
+    { id: "p5", src: "string-lights.jpg", caption: "bandshell lights up", rot: -3 }
+  ];
 
-  function rawUrl(){
-    return "https://raw.githubusercontent.com/" + GH_OWNER + "/" + GH_REPO + "/" + GH_BRANCH + "/" + GH_PATH + "?t=" + Date.now();
+  function rawUrl(filePath){
+    return "https://raw.githubusercontent.com/" + GH_OWNER + "/" + GH_REPO + "/" + GH_BRANCH + "/" + filePath + "?t=" + Date.now();
   }
-  function apiUrl(){
-    return "https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO + "/contents/" + GH_PATH;
+  function actionsApiBase(){
+    return "https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO + "/actions";
+  }
+  function contentsApiUrl(filePath){
+    return "https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO + "/contents/" + filePath;
   }
   function isConfigured(){
     return GH_OWNER !== "YOUR-GITHUB-USERNAME" && GH_REPO !== "YOUR-REPO-NAME";
   }
-  function utf8ToB64(str){ return btoa(unescape(encodeURIComponent(str))); }
-  function b64ToUtf8(str){ return decodeURIComponent(escape(atob(str.replace(/\n/g, "")))); }
+  function escapeHtml(str){
+    const d = document.createElement("div");
+    d.textContent = str == null ? "" : String(str);
+    return d.innerHTML;
+  }
+  function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
 
-  // ---------- PUBLIC READ (no token) ----------
+  async function sha256Hex(str){
+    const enc = new TextEncoder().encode(str);
+    const buf = await crypto.subtle.digest("SHA-256", enc);
+    return Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2, "0"); }).join("");
+  }
+
+  // ---------- PUBLIC READS (no token) ----------
   async function loadUpdates(){
     if(!isConfigured()) return DEFAULT_UPDATES;
     try{
-      const res = await fetch(rawUrl(), { cache: "no-store" });
+      const res = await fetch(rawUrl(GH_UPDATES_PATH), { cache: "no-store" });
       if(!res.ok) return DEFAULT_UPDATES;
       const data = await res.json();
       return Array.isArray(data) ? data : DEFAULT_UPDATES;
@@ -985,44 +1029,90 @@
       return DEFAULT_UPDATES;
     }
   }
-
-  // ---------- ADMIN READ/WRITE (needs token) ----------
-  async function ghGetFile(token){
-    const res = await fetch(apiUrl() + "?ref=" + GH_BRANCH, {
-      headers: { Authorization: "Bearer " + token, Accept: "application/vnd.github+json" }
-    });
-    if(res.status === 404) return { sha: null, list: [] };
-    if(res.status === 401 || res.status === 403) throw new Error("That token was rejected — check it's valid and has Contents read/write access to this repo.");
-    if(!res.ok) throw new Error("GitHub error " + res.status);
-    const data = await res.json();
-    let list = [];
-    try{ list = JSON.parse(b64ToUtf8(data.content)); }catch(e){ list = []; }
-    return { sha: data.sha, list: Array.isArray(list) ? list : [] };
+  async function loadPhotos(){
+    if(!isConfigured()) return DEFAULT_PHOTOS;
+    try{
+      const res = await fetch(rawUrl(GH_PHOTOS_PATH), { cache: "no-store" });
+      if(!res.ok) return DEFAULT_PHOTOS;
+      const data = await res.json();
+      return (Array.isArray(data) && data.length) ? data : DEFAULT_PHOTOS;
+    }catch(e){
+      return DEFAULT_PHOTOS;
+    }
+  }
+  async function loadAvailableImages(){
+    try{
+      const res = await fetch(contentsApiUrl(GH_IMAGES_DIR), { headers: { Accept: "application/vnd.github+json" } });
+      if(!res.ok) return DEFAULT_PHOTOS.map(function(p){ return p.src; });
+      const data = await res.json();
+      return data
+        .filter(function(f){ return f.type === "file" && /\.(jpe?g|png|webp|gif)$/i.test(f.name); })
+        .map(function(f){ return f.name; });
+    }catch(e){
+      return DEFAULT_PHOTOS.map(function(p){ return p.src; });
+    }
   }
 
-  async function ghSaveFile(token, list, sha){
-    const body = {
-      message: "Update market updates board",
-      content: utf8ToB64(JSON.stringify(list, null, 2)),
-      branch: GH_BRANCH
-    };
-    if(sha) body.sha = sha;
-    const res = await fetch(apiUrl(), {
-      method: "PUT",
+  // ---------- WORKFLOW TRIGGER (needs the Actions-only token) ----------
+  async function dispatchWorkflow(inputs){
+    const res = await fetch(actionsApiBase() + "/workflows/" + GH_WORKFLOW_FILE + "/dispatches", {
+      method: "POST",
       headers: {
-        Authorization: "Bearer " + token,
+        Authorization: "Bearer " + GH_ACTIONS_TOKEN,
         Accept: "application/vnd.github+json",
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify({ ref: GH_BRANCH, inputs: inputs })
     });
-    if(!res.ok){
-      const err = await res.json().catch(function(){ return {}; });
-      throw new Error(err.message || ("GitHub error " + res.status));
+    if(res.status === 401 || res.status === 403){
+      throw new Error("The embedded Actions token was rejected — check GH_ACTIONS_TOKEN in index.html has 'Actions: Read and write' access to this repo.");
     }
-    return await res.json();
+    if(res.status === 404){
+      throw new Error("Workflow not found — check GH_WORKFLOW_FILE matches the file in .github/workflows/.");
+    }
+    if(!res.ok){
+      throw new Error("GitHub error " + res.status + " triggering the workflow.");
+    }
   }
 
+  async function awaitRunConclusion(sinceISO){
+    const deadline = Date.now() + 90000;
+    const since = new Date(sinceISO).getTime();
+    let sawRun = false;
+    while(Date.now() < deadline){
+      await sleep(1500);
+      let data;
+      try{
+        const res = await fetch(actionsApiBase() + "/workflows/" + GH_WORKFLOW_FILE + "/runs?event=workflow_dispatch&per_page=5", {
+          headers: { Authorization: "Bearer " + GH_ACTIONS_TOKEN, Accept: "application/vnd.github+json" }
+        });
+        if(!res.ok) continue;
+        data = await res.json();
+      }catch(e){ continue; }
+
+      const candidate = (data.workflow_runs || []).find(function(r){ return new Date(r.created_at).getTime() >= since - 5000; });
+      if(!candidate) continue;
+      sawRun = true;
+      if(candidate.status === "completed"){
+        return candidate.conclusion; // "success" | "failure" | "cancelled" | ...
+      }
+    }
+    if(sawRun) throw new Error("Still waiting on GitHub Actions to finish — check the repo's Actions tab, it may just be slow to start.");
+    throw new Error("Couldn't find the triggered run — check the repo's Actions tab directly.");
+  }
+
+  async function runAdminAction(actionType, extraInputs){
+    if(!adminPasswordHash) throw new Error("Not logged in.");
+    const sinceISO = new Date().toISOString();
+    const inputs = Object.assign({ action_type: actionType, password_hash: adminPasswordHash }, extraInputs || {});
+    await dispatchWorkflow(inputs);
+    const conclusion = await awaitRunConclusion(sinceISO);
+    if(conclusion !== "success"){
+      throw new Error(actionType === "ping" ? "Incorrect admin password." : "The update was rejected — open the repo's Actions tab for details.");
+    }
+  }
+
+  // ---------- RENDERING ----------
   function renderBanner(list){
     const container = document.getElementById("updatesList");
     const banner = document.getElementById("updatesBanner");
@@ -1038,10 +1128,16 @@
     }).join("");
   }
 
-  function escapeHtml(str){
-    const d = document.createElement("div");
-    d.textContent = str;
-    return d.innerHTML;
+  function renderPolaroidStack(photos){
+    const stack = document.getElementById("polaroidStack");
+    stack.innerHTML = photos.map(function(p){
+      return '<div class="polaroid" style="--rot:' + (p.rot || 0) + 'deg">' +
+        '<span class="tape t-left"></span><span class="tape t-right"></span>' +
+        '<div class="polaroid-photo"><img src="images/' + encodeURIComponent(p.src) + '" alt="' + escapeHtml(p.caption) + '"></div>' +
+        '<div class="polaroid-cap">' + escapeHtml(p.caption) + '</div>' +
+        '</div>';
+    }).join("");
+    initPolaroidCycle();
   }
 
   function renderAdminList(list){
@@ -1052,17 +1148,18 @@
     }
     el.innerHTML = list.map(function(u){
       return '<div class="admin-update-row"><span>' + escapeHtml(u.text) +
-        '</span><button type="button" data-id="' + u.id + '" class="removeUpdateBtn">Remove</button></div>';
+        '</span><button type="button" data-id="' + escapeHtml(u.id) + '" class="removeUpdateBtn">Remove</button></div>';
     }).join("");
     Array.from(el.querySelectorAll(".removeUpdateBtn")).forEach(function(btn){
       btn.addEventListener("click", async function(){
         btn.disabled = true;
+        updateFormError.textContent = "Publishing…";
         try{
-          const current = await ghGetFile(adminToken);
-          const next = current.list.filter(function(u){ return u.id !== btn.getAttribute("data-id"); });
-          await ghSaveFile(adminToken, next, current.sha);
-          renderAdminList(next);
-          renderBanner(next);
+          await runAdminAction("delete", { update_id: btn.getAttribute("data-id") });
+          const list = await loadUpdates();
+          updateFormError.textContent = "";
+          renderAdminList(list);
+          renderBanner(list);
         }catch(e){
           updateFormError.textContent = e.message;
           btn.disabled = false;
@@ -1071,8 +1168,91 @@
     });
   }
 
-  // initial public banner render
+  // ---------- PHOTO EDITOR ----------
+  let editorPhotos = [];
+  let availableImageFiles = [];
+
+  function renderPhotoEditor(){
+    const el = document.getElementById("photoEditorList");
+    if(!editorPhotos.length){
+      el.innerHTML = '<p class="admin-empty">No photos in the stack.</p>';
+      return;
+    }
+    el.innerHTML = editorPhotos.map(function(p, i){
+      const options = availableImageFiles.map(function(f){
+        return '<option value="' + escapeHtml(f) + '"' + (f === p.src ? " selected" : "") + '>' + escapeHtml(f) + '</option>';
+      }).join("");
+      return '<div class="photo-editor-row" data-index="' + i + '">' +
+        '<img src="images/' + encodeURIComponent(p.src) + '" alt="">' +
+        '<div class="photo-editor-fields">' +
+          '<select class="photoSrcSelect">' + options + '</select>' +
+          '<input type="text" class="photoCaptionInput" value="' + escapeHtml(p.caption) + '" placeholder="Caption">' +
+        '</div>' +
+        '<div class="photo-editor-actions">' +
+          '<button type="button" class="moveUp"' + (i === 0 ? " disabled" : "") + '>Up</button>' +
+          '<button type="button" class="moveDown"' + (i === editorPhotos.length - 1 ? " disabled" : "") + '>Down</button>' +
+          '<button type="button" class="remove">Remove</button>' +
+        '</div>' +
+      '</div>';
+    }).join("");
+
+    Array.from(el.querySelectorAll(".photo-editor-row")).forEach(function(row){
+      const i = Number(row.getAttribute("data-index"));
+      row.querySelector(".photoSrcSelect").addEventListener("change", function(e){ editorPhotos[i].src = e.target.value; row.querySelector("img").src = "images/" + encodeURIComponent(e.target.value); });
+      row.querySelector(".photoCaptionInput").addEventListener("input", function(e){ editorPhotos[i].caption = e.target.value; });
+      row.querySelector(".remove").addEventListener("click", function(){ editorPhotos.splice(i, 1); renderPhotoEditor(); });
+      const up = row.querySelector(".moveUp");
+      if(up) up.addEventListener("click", function(){
+        if(i === 0) return;
+        const tmp = editorPhotos[i - 1]; editorPhotos[i - 1] = editorPhotos[i]; editorPhotos[i] = tmp;
+        renderPhotoEditor();
+      });
+      const down = row.querySelector(".moveDown");
+      if(down) down.addEventListener("click", function(){
+        if(i === editorPhotos.length - 1) return;
+        const tmp = editorPhotos[i + 1]; editorPhotos[i + 1] = editorPhotos[i]; editorPhotos[i] = tmp;
+        renderPhotoEditor();
+      });
+    });
+  }
+
+  document.getElementById("addPhotoBtn").addEventListener("click", function(){
+    if(!availableImageFiles.length) return;
+    const rots = [-4, 3, -2, 5, -3];
+    editorPhotos.push({
+      id: "p-" + Date.now(),
+      src: availableImageFiles[0],
+      caption: "",
+      rot: rots[editorPhotos.length % rots.length]
+    });
+    renderPhotoEditor();
+  });
+
+  document.getElementById("savePhotosBtn").addEventListener("click", async function(){
+    const btn = this;
+    const photoFormError = document.getElementById("photoFormError");
+    photoFormError.textContent = "";
+    if(editorPhotos.some(function(p){ return !p.caption.trim(); })){
+      photoFormError.textContent = "Every photo needs a caption.";
+      return;
+    }
+    btn.disabled = true;
+    photoFormError.textContent = "Publishing…";
+    try{
+      await runAdminAction("update_photos", { photos_json: JSON.stringify(editorPhotos) });
+      const photos = await loadPhotos();
+      renderPolaroidStack(photos);
+      photoFormError.textContent = "";
+    }catch(e){
+      photoFormError.textContent = e.message;
+    }finally{
+      btn.disabled = false;
+    }
+  });
+
+  // initial public render
   loadUpdates().then(renderBanner);
+  loadPhotos().then(renderPolaroidStack);
 
   // ---------- ADMIN LOGIN / PANEL MODALS ----------
   const loginOverlay = document.getElementById("loginOverlay");
@@ -1086,12 +1266,12 @@
   const updateFormError = document.getElementById("updateFormError");
   const clearUpdatesBtn = document.getElementById("clearUpdatesBtn");
 
-  let adminToken = null; // held in memory only, never persisted
+  let adminPasswordHash = null; // held in memory only, never persisted
 
   adminOpenBtn.addEventListener("click", function(){
     loginError.textContent = "";
     document.getElementById("adminPass").value = "";
-    if(adminToken){
+    if(adminPasswordHash){
       openPanel();
     }else{
       loginOverlay.classList.add("is-open");
@@ -1110,13 +1290,22 @@
       loginError.textContent = "Set GH_OWNER / GH_REPO in the script before this will work.";
       return;
     }
-    const token = document.getElementById("adminPass").value.trim();
-    if(!token){ loginError.textContent = "Paste your GitHub token."; return; }
+    const password = document.getElementById("adminPass").value;
+    if(!password){ loginError.textContent = "Enter the admin password."; return; }
     const submitBtn = loginForm.querySelector("button[type=submit]");
     submitBtn.disabled = true;
+    loginError.textContent = "Checking…";
     try{
-      await ghGetFile(token); // validates the token actually works
-      adminToken = token;
+      const hash = await sha256Hex(password);
+      const sinceISO = new Date().toISOString();
+      await dispatchWorkflow({ action_type: "ping", password_hash: hash });
+      const conclusion = await awaitRunConclusion(sinceISO);
+      if(conclusion !== "success"){
+        loginError.textContent = "Incorrect admin password.";
+        return;
+      }
+      adminPasswordHash = hash;
+      loginError.textContent = "";
       loginOverlay.classList.remove("is-open");
       openPanel();
     }catch(err){
@@ -1129,11 +1318,20 @@
   async function openPanel(){
     panelOverlay.classList.add("is-open");
     updateFormError.textContent = "";
+    document.getElementById("photoFormError").textContent = "";
     try{
-      const current = await ghGetFile(adminToken);
-      renderAdminList(current.list);
+      const list = await loadUpdates();
+      renderAdminList(list);
     }catch(e){
       updateFormError.textContent = e.message;
+    }
+    try{
+      const [photos, images] = await Promise.all([loadPhotos(), loadAvailableImages()]);
+      editorPhotos = photos.map(function(p){ return Object.assign({}, p); });
+      availableImageFiles = images;
+      renderPhotoEditor();
+    }catch(e){
+      document.getElementById("photoFormError").textContent = e.message;
     }
   }
 
@@ -1148,14 +1346,14 @@
     }
     const submitBtn = updateForm.querySelector("button[type=submit]");
     submitBtn.disabled = true;
+    updateFormError.textContent = "Publishing…";
     try{
-      const current = await ghGetFile(adminToken);
-      const withoutDefaults = current.list.filter(function(u){ return !String(u.id).startsWith("default-"); });
-      withoutDefaults.push({ id: "u-" + Date.now(), text: text });
-      await ghSaveFile(adminToken, withoutDefaults, current.sha);
+      await runAdminAction("publish", { text: text });
+      const list = await loadUpdates();
       textEl.value = "";
-      renderAdminList(withoutDefaults);
-      renderBanner(withoutDefaults);
+      updateFormError.textContent = "";
+      renderAdminList(list);
+      renderBanner(list);
     }catch(err){
       updateFormError.textContent = err.message;
     }finally{
@@ -1164,13 +1362,13 @@
   });
 
   clearUpdatesBtn.addEventListener("click", async function(){
-    updateFormError.textContent = "";
+    updateFormError.textContent = "Publishing…";
     clearUpdatesBtn.disabled = true;
     try{
-      const current = await ghGetFile(adminToken);
-      await ghSaveFile(adminToken, [], current.sha);
+      await runAdminAction("clear", {});
       renderAdminList([]);
       renderBanner([]);
+      updateFormError.textContent = "";
     }catch(e){
       updateFormError.textContent = e.message;
     }finally{
@@ -1211,9 +1409,6 @@
   });
 })();
 </script>
-
-</body>
-</html>
 
 </body>
 </html>
