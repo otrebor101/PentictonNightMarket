@@ -100,6 +100,7 @@
     align-items:center;
     justify-content:space-between;
     padding:16px 0;
+    position:relative;
   }
   .brand{
     font-family:'Fraunces',serif;
@@ -133,7 +134,16 @@
     font-size:1.2rem;
     white-space:nowrap;
   }
-  .mobile-toggle{display:none;background:none;border:none;color:var(--cream);font-size:1.6rem;cursor:pointer;}
+  .mobile-toggle{
+    display:none;
+    background:none;
+    border:none;
+    color:var(--cream);
+    font-size:1.6rem;
+    cursor:pointer;
+    line-height:1;
+    padding:6px;
+  }
 
   /* alert */
   .alert{
@@ -506,10 +516,26 @@
 
   /* ---------- RESPONSIVE ---------- */
   @media (max-width:880px){
-    nav.links{display:none;}
+    nav.links{
+      display:none;
+      position:absolute;
+      top:100%;
+      left:0;
+      right:0;
+      flex-direction:column;
+      gap:0;
+      background:var(--dusk-navy-deep);
+      border-top:1px solid rgba(251,242,227,0.14);
+      border-bottom:1px solid rgba(251,242,227,0.14);
+      padding:8px 28px 14px;
+      box-shadow:0 20px 30px -18px rgba(0,0,0,0.5);
+    }
+    nav.links.is-open{display:flex;}
+    nav.links a{padding:12px 0;border-bottom:1px solid rgba(251,242,227,0.08);}
+    nav.links a:last-child{border-bottom:none;}
     .mobile-toggle{display:block;}
     .hero-inner{grid-template-columns:1fr;padding-bottom:50px;}
-    .hero-photo-stack{order:-1;aspect-ratio:16/10;}
+    .hero-photo-stack{order:-1;aspect-ratio:4/5;max-width:340px;margin:0 auto;}
     .intro-grid{grid-template-columns:1fr;gap:36px;}
     .offer-grid{grid-template-columns:1fr;}
     .sponsor-inner{grid-template-columns:1fr;}
@@ -630,14 +656,14 @@
   <header>
     <div class="wrap nav">
       <div class="brand">Penticton Night Market<span>Thursdays · Gyro Park</span></div>
-      <nav class="links">
+      <nav class="links" id="navLinks">
         <a href="#top" id="navHomeLink">Home</a>
         <a href="#join">Vendors</a>
         <a href="#visit">Location</a>
         <a href="#partners">Partners</a>
         <a href="#visit">FAQ</a>
       </nav>
-      <button class="mobile-toggle" aria-label="Menu">&#9776;</button>
+      <button class="mobile-toggle" id="mobileToggleBtn" aria-label="Menu" aria-expanded="false" aria-controls="navLinks">&#9776;</button>
     </div>
   </header>
 </div>
@@ -930,6 +956,38 @@
     e.preventDefault();
     window.scrollTo({ top: 0, behavior: 'smooth' });
     history.replaceState(null, '', '#top');
+    closeMobileNav();
+  });
+
+  // ---------- MOBILE NAV TOGGLE ----------
+  const mobileToggleBtn = document.getElementById('mobileToggleBtn');
+  const navLinks = document.getElementById('navLinks');
+
+  function openMobileNav(){
+    navLinks.classList.add('is-open');
+    mobileToggleBtn.setAttribute('aria-expanded', 'true');
+    mobileToggleBtn.innerHTML = '&times;';
+  }
+  function closeMobileNav(){
+    navLinks.classList.remove('is-open');
+    mobileToggleBtn.setAttribute('aria-expanded', 'false');
+    mobileToggleBtn.innerHTML = '&#9776;';
+  }
+  mobileToggleBtn.addEventListener('click', function(){
+    if(navLinks.classList.contains('is-open')){
+      closeMobileNav();
+    }else{
+      openMobileNav();
+    }
+  });
+  // close the menu after tapping any nav link (other than Home, handled above)
+  Array.from(navLinks.querySelectorAll('a')).forEach(function(a){
+    if(a.id === 'navHomeLink') return;
+    a.addEventListener('click', closeMobileNav);
+  });
+  // collapse back to the hamburger if the viewport grows past the mobile breakpoint
+  window.addEventListener('resize', function(){
+    if(window.innerWidth > 880) closeMobileNav();
   });
 </script>
 
@@ -976,55 +1034,12 @@
 <script>
 (function(){
   // ================= CONFIG =================
-  // Fill these in once you've created the repo (see README).
-  // The repo must be PUBLIC so the raw JSON can be read without a token.
-  const GH_OWNER  = "otrebor101";      // GITHUB USERNAME
-  const GH_REPO   = "PentictonNightMarket"; // REPO NAME
+  const GH_OWNER  = "otrebor101";
+  const GH_REPO   = "PentictonNightMarket";
   const GH_BRANCH = "main";
   const GH_UPDATES_PATH  = "data/market-updates.json";
   const GH_PHOTOS_PATH   = "data/photos.json";
   const GH_IMAGES_DIR    = "images";
-
-  // ------------------------------------------
-  // HOW THIS WORKS (zero servers of your own, no GitHub Actions involved):
-  // - Every visitor's browser reads the updates + photo stack straight from the
-  //   raw files on GitHub — no auth needed for that, it's a public GET.
-  // - The admin panel writes directly to the repo using GitHub's Contents API:
-  //   it GETs the current file (to get its sha), then PUTs the new content
-  //   back with that sha, which creates a commit on GH_BRANCH. Instant — no
-  //   workflow to dispatch, no run to poll for, and nothing that can be
-  //   blocked by an Actions outage or an account billing lock.
-  // - This requires a GitHub token. It is NOT stored anywhere in this file or
-  //   this repo, in any form. You (the admin) paste a fine-grained PAT into
-  //   the login form each time you use the panel; it lives only in this
-  //   tab's memory for that session and is discarded when the tab closes or
-  //   the page reloads. Use a token scoped to ONLY this repo, with ONLY the
-  //   "Contents: Read and write" permission — that token IS the login:
-  //   GitHub itself rejects the request if it's wrong, missing, expired, or
-  //   under-scoped, so there's no separate password to manage or leak.
-  // - Trade-off vs. the Actions-workflow approach: if two people save at the
-  //   exact same moment, the second write can fail with a 409 (sha
-  //   mismatch) and needs a retry. For a single admin clicking a button
-  //   occasionally, this basically never comes up.
-  // - Even though the commit itself lands instantly, the LIVE SITE doesn't
-  //   necessarily reflect it right away: GitHub Pages has to rebuild and
-  //   redeploy, and that can take anywhere from a few seconds to several
-  //   minutes depending on GitHub's shared runner load — there's no
-  //   reliable way to know the real number from the browser, so this panel
-  //   doesn't try to poll for it. Instead, the moment a save succeeds it
-  //   lights up a small "deploy light" banner (stored in this browser's
-  //   localStorage, so it survives refreshes) that fades from red to
-  //   yellow to green over a few minutes as a rough, honest guide for when
-  //   to refresh — not a guarantee, just a nudge.
-  //
-  // ONE-TIME SETUP — see README for the full walkthrough:
-  //   1. Push this repo to GitHub, turn on Pages.
-  //   2. Fill in GH_OWNER / GH_REPO above.
-  //   3. Create a fine-grained PAT scoped to ONLY this repo, ONLY
-  //      "Contents: Read and write" permission. Give it a real expiration
-  //      date and keep it somewhere private (a password manager) — you'll
-  //      paste it into the admin login form each time you use the panel,
-  //      not into this file.
   // ================= END CONFIG =================
 
   const DEFAULT_UPDATES = [
@@ -1052,7 +1067,6 @@
     d.textContent = str == null ? "" : String(str);
     return d.innerHTML;
   }
-  // ---------- PUBLIC READS (no token) ----------
   async function loadUpdates(){
     if(!isConfigured()) return DEFAULT_UPDATES;
     try{
@@ -1088,10 +1102,6 @@
     }
   }
 
-  // ---------- DIRECT CONTENTS API WRITES (needs a Contents: Read and write token, entered at login) ----------
-  // No GitHub Actions involved at all — the browser reads the file's current sha,
-  // then PUTs the new content straight back with that sha. Instant, no polling,
-  // and immune to any Actions outage or billing lock on the account.
   function utf8ToBase64(str){
     return btoa(unescape(encodeURIComponent(str)));
   }
@@ -1143,7 +1153,6 @@
   }
 
   function setStatus(el, text, kind){
-    // kind: "pending" | "success" | "error" | "" (clear)
     el.textContent = text || "";
     el.classList.remove("is-success", "is-pending");
     if(kind === "success") el.classList.add("is-success");
@@ -1184,24 +1193,14 @@
     return result;
   }
 
-  // Panel data (the fetched updates list / photo list) goes stale the
-  // instant a write succeeds, and the deploy light now covers "did it
-  // work + when to refresh" — so there's no reason to keep the panel
-  // open. Small delay so the success message is actually visible first.
   function closePanelSoon(){
     setTimeout(function(){
       panelOverlay.classList.remove("is-open");
     }, 900);
   }
 
-  // ---------- DEPLOY LIGHT (local, time-based — no polling) ----------
-  // Deploy timing from the browser's perspective is unknowable in advance
-  // (it's ruled by GitHub's shared runner load), so rather than guess via
-  // repeated fetches, this just tracks "time since last push" in
-  // localStorage and fades a light from red -> yellow -> green as a rough
-  // guide. It's honest about being a guide, not a guarantee.
   const DEPLOY_KEY = "pnm_deploy_started_at";
-  const DEPLOY_WINDOW_MS = 6 * 60 * 1000; // stop showing after ~6 minutes
+  const DEPLOY_WINDOW_MS = 6 * 60 * 1000;
   let deployLightTimer = null;
 
   function markDeployStarted(){
@@ -1245,11 +1244,9 @@
     if(deployLightTimer){ clearInterval(deployLightTimer); deployLightTimer = null; }
   });
 
-  // restore state on load (e.g. admin refreshed mid-wait)
   renderDeployLight();
   if(localStorage.getItem(DEPLOY_KEY)) deployLightTimer = setInterval(renderDeployLight, 5000);
 
-  // ---------- RENDERING ----------
   function renderBanner(list){
     const container = document.getElementById("updatesList");
     const banner = document.getElementById("updatesBanner");
@@ -1302,7 +1299,6 @@
     });
   }
 
-  // ---------- PHOTO EDITOR ----------
   let editorPhotos = [];
   let availableImageFiles = [];
 
@@ -1381,11 +1377,9 @@
     }
   });
 
-  // initial public render
   loadUpdates().then(renderBanner);
   loadPhotos().then(renderPolaroidStack);
 
-  // ---------- ADMIN LOGIN / PANEL MODALS ----------
   const loginOverlay = document.getElementById("loginOverlay");
   const panelOverlay = document.getElementById("panelOverlay");
   const adminOpenBtn = document.getElementById("adminOpenBtn");
@@ -1397,7 +1391,7 @@
   const updateFormError = document.getElementById("updateFormError");
   const clearUpdatesBtn = document.getElementById("clearUpdatesBtn");
 
-  let adminActionsToken = null;  // held in memory only, never persisted, never written to any file
+  let adminActionsToken = null;
 
   adminOpenBtn.addEventListener("click", function(){
     loginError.textContent = "";
@@ -1494,7 +1488,6 @@
     }
   });
 
-  // ---------- PARTNERSHIP FORM (mailto — no backend needed) ----------
   const partnerForm = document.getElementById("partnerForm");
   const partnerFormError = document.getElementById("partnerFormError");
   const partnerFormSuccess = document.getElementById("partnerFormSuccess");
