@@ -230,7 +230,9 @@
   /* ---------- POLAROID HERO STACK ---------- */
   .hero-photo-stack{
     position:relative;
-    aspect-ratio:4/5;
+    width:100%;
+    height:0;
+    padding-top:125%; /* 4:5 aspect ratio, expressed as padding so it can't collapse like aspect-ratio can on some mobile browsers when every child is position:absolute */
   }
   .polaroid{
     position:absolute;
@@ -535,7 +537,7 @@
     nav.links a:last-child{border-bottom:none;}
     .mobile-toggle{display:block;}
     .hero-inner{grid-template-columns:1fr;padding-bottom:50px;}
-    .hero-photo-stack{order:-1;aspect-ratio:4/5;max-width:340px;margin:0 auto;}
+    .hero-photo-stack{order:-1;max-width:340px;margin:0 auto;}
     .intro-grid{grid-template-columns:1fr;gap:36px;}
     .offer-grid{grid-template-columns:1fr;}
     .sponsor-inner{grid-template-columns:1fr;}
