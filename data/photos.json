@@ -8,31 +8,31 @@
   {
     "id": "p2",
     "src": "red-tents.jpg",
-    "caption": "grab some grub on the go!",
+    "caption": "Grab some grub on the go!",
     "rot": 3
   },
   {
     "id": "p3",
     "src": "blue-tent-crafts.jpg",
-    "caption": "market night, music time!",
+    "caption": "Market night, music time!",
     "rot": -2
   },
   {
     "id": "p4",
     "src": "lit-trees.jpg",
-    "caption": "summer air, lake breeze!",
+    "caption": "Summer air, lake breeze!",
     "rot": 5
   },
   {
     "id": "p5",
     "src": "string-lights.jpg",
-    "caption": "the crowd rolls in at ~6pm!",
+    "caption": "The crowd rolls in at ~6pm!",
     "rot": -3
   },
   {
     "id": "p-1785555795277",
     "src": "lights-bokeh.jpg",
-    "caption": "bring the kids! bring the dog!",
+    "caption": "Bring the kids! Bring the dog!",
     "rot": -4
   }
 ]
