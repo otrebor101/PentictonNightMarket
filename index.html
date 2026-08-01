@@ -1149,11 +1149,23 @@
     return { path: path, data: next };
   }
 
-  async function saveAndAnnounce(statusEl, actionType, mutate, pendingLabel){
+  async function saveAndAnnounce(statusEl, actionType, mutate, pendingLabel, autoClose){
+    if(autoClose === undefined) autoClose = true;
     setStatus(statusEl, pendingLabel + "…", "pending");
     const result = await runAdminAction(actionType, mutate);
-    setStatus(statusEl, "✓ Saved and pushed to GitHub. Watch the deploy light on the site for when to refresh.", "success");
+    setStatus(statusEl, "✓ Saved and pushed to GitHub. Watch the deploy light for when to refresh.", "success");
+    if(autoClose) closePanelSoon();
     return result;
+  }
+
+  // Panel data (the fetched updates list / photo list) goes stale the
+  // instant a write succeeds, and the deploy light now covers "did it
+  // work + when to refresh" — so there's no reason to keep the panel
+  // open. Small delay so the success message is actually visible first.
+  function closePanelSoon(){
+    setTimeout(function(){
+      panelOverlay.classList.remove("is-open");
+    }, 900);
   }
 
   // ---------- DEPLOY LIGHT (local, time-based — no polling) ----------
@@ -1254,9 +1266,8 @@
         btn.disabled = true;
         try{
           const idToRemove = btn.getAttribute("data-id");
-          await saveAndAnnounce(updateFormError, "delete", function(list){ return list.filter(function(u){ return u.id !== idToRemove; }); }, "Removing");
-          const list = await loadUpdates();
-          renderAdminList(list);
+          const result = await saveAndAnnounce(updateFormError, "delete", function(list){ return list.filter(function(u){ return u.id !== idToRemove; }); }, "Removing", false);
+          renderAdminList(result.data);
         }catch(e){
           setStatus(updateFormError, e.message, "error");
           btn.disabled = false;
@@ -1435,10 +1446,9 @@
     const submitBtn = updateForm.querySelector("button[type=submit]");
     submitBtn.disabled = true;
     try{
-      await saveAndAnnounce(updateFormError, "publish", function(list){ return list.concat([{ id: "u-" + Date.now(), text: text }]); }, "Publishing");
-      const list = await loadUpdates();
+      const result = await saveAndAnnounce(updateFormError, "publish", function(list){ return list.concat([{ id: "u-" + Date.now(), text: text }]); }, "Publishing");
       textEl.value = "";
-      renderAdminList(list);
+      renderAdminList(result.data);
     }catch(err){
       setStatus(updateFormError, err.message, "error");
     }finally{
