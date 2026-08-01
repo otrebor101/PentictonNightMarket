@@ -547,7 +547,9 @@
     outline:none;border-color:var(--lake-teal);
   }
   .field textarea{resize:vertical;min-height:80px;}
-  .modal-error{color:var(--peach-coral);font-size:0.85rem;margin-top:-8px;margin-bottom:14px;min-height:1em;}
+  .modal-error{color:var(--peach-coral);font-size:0.85rem;margin-top:-8px;margin-bottom:14px;min-height:1em;transition:color .15s;}
+  .modal-error.is-success{color:var(--lake-teal);font-weight:600;}
+  .modal-error.is-pending{color:rgba(32,41,31,0.55);font-weight:400;}
   .btn-block{width:100%;text-align:center;border:none;cursor:pointer;}
   .admin-updates-list{margin:18px 0;display:flex;flex-direction:column;gap:10px;}
   .admin-update-row{
@@ -853,7 +855,7 @@
   <div class="modal-box wide">
     <button class="modal-close" id="panelCloseBtn" aria-label="Close">&times;</button>
     <h3>Market updates</h3>
-    <p class="modal-sub">These appear as a banner under the header for every visitor.</p>
+    <p class="modal-sub">These appear as a banner under the header for every visitor. Changes save straight to GitHub &mdash; this page (and every visitor's browser) needs a refresh to show them.</p>
 
     <div class="admin-updates-list" id="adminUpdatesList"></div>
     <button type="button" class="btn-danger-ghost" id="clearUpdatesBtn">Clear all updates</button>
@@ -1091,6 +1093,14 @@
     }
   }
 
+  function setStatus(el, text, kind){
+    // kind: "pending" | "success" | "error" | "" (clear)
+    el.textContent = text || "";
+    el.classList.remove("is-success", "is-pending");
+    if(kind === "success") el.classList.add("is-success");
+    if(kind === "pending") el.classList.add("is-pending");
+  }
+
   async function checkTokenWorks(token){
     const res = await fetch("https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO, {
       headers: { Authorization: "Bearer " + token, Accept: "application/vnd.github+json" }
@@ -1155,16 +1165,15 @@
     Array.from(el.querySelectorAll(".removeUpdateBtn")).forEach(function(btn){
       btn.addEventListener("click", async function(){
         btn.disabled = true;
-        updateFormError.textContent = "Publishing…";
+        setStatus(updateFormError, "Removing…", "pending");
         try{
           const idToRemove = btn.getAttribute("data-id");
           await runAdminAction("delete", function(list){ return list.filter(function(u){ return u.id !== idToRemove; }); });
           const list = await loadUpdates();
-          updateFormError.textContent = "";
+          setStatus(updateFormError, "✓ Removed — refresh the page to update the live banner.", "success");
           renderAdminList(list);
-          renderBanner(list);
         }catch(e){
-          updateFormError.textContent = e.message;
+          setStatus(updateFormError, e.message, "error");
           btn.disabled = false;
         }
       });
@@ -1234,21 +1243,19 @@
   document.getElementById("savePhotosBtn").addEventListener("click", async function(){
     const btn = this;
     const photoFormError = document.getElementById("photoFormError");
-    photoFormError.textContent = "";
+    setStatus(photoFormError, "", "");
     if(editorPhotos.some(function(p){ return !p.caption.trim(); })){
-      photoFormError.textContent = "Every photo needs a caption.";
+      setStatus(photoFormError, "Every photo needs a caption.", "error");
       return;
     }
     btn.disabled = true;
-    photoFormError.textContent = "Publishing…";
+    setStatus(photoFormError, "Saving…", "pending");
     try{
       const photosToSave = editorPhotos.map(function(p){ return Object.assign({}, p); });
       await runAdminAction("update_photos", function(){ return photosToSave; });
-      const photos = await loadPhotos();
-      renderPolaroidStack(photos);
-      photoFormError.textContent = "";
+      setStatus(photoFormError, "✓ Saved — refresh the page to see the new photo stack.", "success");
     }catch(e){
-      photoFormError.textContent = e.message;
+      setStatus(photoFormError, e.message, "error");
     }finally{
       btn.disabled = false;
     }
@@ -1315,13 +1322,13 @@
 
   async function openPanel(){
     panelOverlay.classList.add("is-open");
-    updateFormError.textContent = "";
-    document.getElementById("photoFormError").textContent = "";
+    setStatus(updateFormError, "", "");
+    setStatus(document.getElementById("photoFormError"), "", "");
     try{
       const list = await loadUpdates();
       renderAdminList(list);
     }catch(e){
-      updateFormError.textContent = e.message;
+      setStatus(updateFormError, e.message, "error");
     }
     try{
       const [photos, images] = await Promise.all([loadPhotos(), loadAvailableImages()]);
@@ -1329,46 +1336,44 @@
       availableImageFiles = images;
       renderPhotoEditor();
     }catch(e){
-      document.getElementById("photoFormError").textContent = e.message;
+      setStatus(document.getElementById("photoFormError"), e.message, "error");
     }
   }
 
   updateForm.addEventListener("submit", async function(e){
     e.preventDefault();
-    updateFormError.textContent = "";
+    setStatus(updateFormError, "", "");
     const textEl = document.getElementById("updateText");
     const text = textEl.value.trim();
     if(!text){
-      updateFormError.textContent = "Enter some update text first.";
+      setStatus(updateFormError, "Enter some update text first.", "error");
       return;
     }
     const submitBtn = updateForm.querySelector("button[type=submit]");
     submitBtn.disabled = true;
-    updateFormError.textContent = "Publishing…";
+    setStatus(updateFormError, "Publishing…", "pending");
     try{
       await runAdminAction("publish", function(list){ return list.concat([{ id: "u-" + Date.now(), text: text }]); });
       const list = await loadUpdates();
       textEl.value = "";
-      updateFormError.textContent = "";
+      setStatus(updateFormError, "✓ Published — refresh the page to see it live.", "success");
       renderAdminList(list);
-      renderBanner(list);
     }catch(err){
-      updateFormError.textContent = err.message;
+      setStatus(updateFormError, err.message, "error");
     }finally{
       submitBtn.disabled = false;
     }
   });
 
   clearUpdatesBtn.addEventListener("click", async function(){
-    updateFormError.textContent = "Publishing…";
+    setStatus(updateFormError, "Clearing…", "pending");
     clearUpdatesBtn.disabled = true;
     try{
       await runAdminAction("clear", function(){ return []; });
       renderAdminList([]);
-      renderBanner([]);
-      updateFormError.textContent = "";
+      setStatus(updateFormError, "✓ Cleared — refresh the page to update the live banner.", "success");
     }catch(e){
-      updateFormError.textContent = e.message;
+      setStatus(updateFormError, e.message, "error");
     }finally{
       clearUpdatesBtn.disabled = false;
     }
