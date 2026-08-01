@@ -836,11 +836,15 @@
   <div class="modal-box">
     <button class="modal-close" id="loginCloseBtn" aria-label="Close">&times;</button>
     <h3>Admin login</h3>
-    <p class="modal-sub">Manage the market updates banner and photo stack. Changes are made by a GitHub Action running on GitHub's servers &mdash; enter the admin password to authorize a change.</p>
+    <p class="modal-sub">Manage the market updates banner and photo stack. Changes are made by a GitHub Action running on GitHub's servers &mdash; enter the admin password and a GitHub Actions token to authorize a change.</p>
     <form id="loginForm">
       <div class="field">
         <label for="adminPass">Admin password</label>
         <input type="password" id="adminPass" autocomplete="off" placeholder="Admin password">
+      </div>
+      <div class="field">
+        <label for="adminToken">GitHub Actions token</label>
+        <input type="password" id="adminToken" autocomplete="off" placeholder="github_pat_...">
       </div>
       <div class="modal-error" id="loginError"></div>
       <button type="submit" class="btn-primary btn-block">Log in</button>
@@ -954,42 +958,35 @@
   //   on GitHub's own servers and does the actual file edit + commit. That
   //   removes the client-side "sha does not match" race entirely, since the
   //   workflow always starts from a fresh checkout and runs are serialized.
-  // - The token below authorizes the *trigger* call only. It is a fine-grained
-  //   GitHub PAT scoped to ONLY this repo, with ONLY the "Actions: Read and
-  //   write" permission — it cannot read or write any file directly, so it is
-  //   safe to leave visible in this public file. It is intentionally set to
-  //   never expire so nobody has to keep re-pasting a code.
+  // - Triggering that workflow requires a GitHub token. It is NOT stored
+  //   anywhere in this file or this repo, in any form. You (the admin) paste
+  //   a fine-grained PAT into the login form each time you use the panel; it
+  //   lives only in this tab's memory for that session and is discarded when
+  //   the tab closes or the page reloads. Use a token scoped to ONLY this
+  //   repo, with ONLY the "Actions: Read and write" permission, so a leaked
+  //   or expired one can't do anything worse than trigger a run that then
+  //   fails the password check below.
   // - The real gate against anyone but you making changes is the ADMIN
-  //   PASSWORD, entered at login. It is hashed (SHA-256) in the browser and
-  //   compared against a secret on GitHub's side, inside the workflow run —
-  //   the plain password is never sent anywhere and never appears in this
-  //   file or in any log, even though the repo (and its Action run history)
-  //   is public.
+  //   PASSWORD, also entered at login. It is hashed (SHA-256) in the browser
+  //   and compared against a secret on GitHub's side, inside the workflow
+  //   run — the plain password is never sent anywhere and never appears in
+  //   this file or in any log, even though the repo (and its Action run
+  //   history) is public.
   //
   // ONE-TIME SETUP — see README for the full walkthrough:
   //   1. Push this repo to GitHub, turn on Pages.
   //   2. Fill in GH_OWNER / GH_REPO above.
   //   3. Create a fine-grained PAT scoped to ONLY this repo, ONLY
-  //      "Actions: Read and write" permission, no expiration. Paste it
-  //      into GH_ACTIONS_TOKEN_B64 below (see README step 4 — it must be
-  //      base64-encoded, not pasted raw, or GitHub's own secret scanner
-  //      will auto-revoke it within minutes of the push).
+  //      "Actions: Read and write" permission. Give it a real expiration
+  //      date and keep it somewhere private (a password manager) — you'll
+  //      paste it into the admin login form each time you use the panel,
+  //      not into this file.
   //   4. Repo → Settings → Secrets and variables → Actions → New repository
   //      secret named ADMIN_PASSWORD_HASH, containing the SHA-256 hex
-  //      digest of whatever password you want to log in with. The login
-  //      screen (browser console) can compute this for you, or use any
-  //      "sha256 hex" tool — see README.
+  //      digest of whatever password you want to log in with. Use
+  //      hash-password.html to compute it, or any "sha256 hex" tool — see
+  //      README.
   // ================= END CONFIG =================
-
-  // Stored base64-encoded, not as a plain "github_pat_..." string — GitHub's
-  // secret scanning matches that literal pattern in public repos and
-  // auto-revokes anything it recognizes, regardless of scope. Encoding it
-  // sidesteps that scanner. It is NOT a real security measure: the decoded
-  // token is still fully visible to anyone inspecting network requests from
-  // this page, exactly as before. The actual gate against misuse is the
-  // ADMIN_PASSWORD_HASH check inside the workflow — see README.
-  const GH_ACTIONS_TOKEN_B64 = "Z2l0aHViX3BhdF8xMUJNSllRWUEwRThOVDE3QUowWFBYX2E0R3FQR25zSEZWMEJRd2dYYmlFZnFUOWJ2SE1QbUt5WG51c0xTcElJaDVIV0hNWVRGSFRNelROVnBF";
-  const GH_ACTIONS_TOKEN = atob(GH_ACTIONS_TOKEN_B64);
 
   const DEFAULT_UPDATES = [
     { id: "default-1", text: "No market on Aug 6 for Peach Fest, and no market on June 26 for the Peach City Beach Cruise. Check Instagram the afternoon of each market for weather or air-quality calls." }
@@ -1063,19 +1060,19 @@
     }
   }
 
-  // ---------- WORKFLOW TRIGGER (needs the Actions-only token) ----------
-  async function dispatchWorkflow(inputs){
+  // ---------- WORKFLOW TRIGGER (needs the Actions-only token, entered at login) ----------
+  async function dispatchWorkflow(token, inputs){
     const res = await fetch(actionsApiBase() + "/workflows/" + GH_WORKFLOW_FILE + "/dispatches", {
       method: "POST",
       headers: {
-        Authorization: "Bearer " + GH_ACTIONS_TOKEN,
+        Authorization: "Bearer " + token,
         Accept: "application/vnd.github+json",
         "Content-Type": "application/json"
       },
       body: JSON.stringify({ ref: GH_BRANCH, inputs: inputs })
     });
     if(res.status === 401 || res.status === 403){
-      throw new Error("The embedded Actions token was rejected — check GH_ACTIONS_TOKEN in index.html has 'Actions: Read and write' access to this repo.");
+      throw new Error("That token was rejected — check it's a fine-grained PAT with 'Actions: Read and write' access to this repo, and hasn't expired.");
     }
     if(res.status === 404){
       throw new Error("Workflow not found — check GH_WORKFLOW_FILE matches the file in .github/workflows/.");
@@ -1085,7 +1082,7 @@
     }
   }
 
-  async function awaitRunConclusion(sinceISO){
+  async function awaitRunConclusion(token, sinceISO){
     const deadline = Date.now() + 90000;
     const since = new Date(sinceISO).getTime();
     let sawRun = false;
@@ -1094,7 +1091,7 @@
       let data;
       try{
         const res = await fetch(actionsApiBase() + "/workflows/" + GH_WORKFLOW_FILE + "/runs?event=workflow_dispatch&per_page=5", {
-          headers: { Authorization: "Bearer " + GH_ACTIONS_TOKEN, Accept: "application/vnd.github+json" }
+          headers: { Authorization: "Bearer " + token, Accept: "application/vnd.github+json" }
         });
         if(!res.ok) continue;
         data = await res.json();
@@ -1112,11 +1109,11 @@
   }
 
   async function runAdminAction(actionType, extraInputs){
-    if(!adminPasswordHash) throw new Error("Not logged in.");
+    if(!adminPasswordHash || !adminActionsToken) throw new Error("Not logged in.");
     const sinceISO = new Date().toISOString();
     const inputs = Object.assign({ action_type: actionType, password_hash: adminPasswordHash }, extraInputs || {});
-    await dispatchWorkflow(inputs);
-    const conclusion = await awaitRunConclusion(sinceISO);
+    await dispatchWorkflow(adminActionsToken, inputs);
+    const conclusion = await awaitRunConclusion(adminActionsToken, sinceISO);
     if(conclusion !== "success"){
       throw new Error(actionType === "ping" ? "Incorrect admin password." : "The update was rejected — open the repo's Actions tab for details.");
     }
@@ -1276,12 +1273,14 @@
   const updateFormError = document.getElementById("updateFormError");
   const clearUpdatesBtn = document.getElementById("clearUpdatesBtn");
 
-  let adminPasswordHash = null; // held in memory only, never persisted
+  let adminPasswordHash = null;  // held in memory only, never persisted
+  let adminActionsToken = null;  // held in memory only, never persisted, never written to any file
 
   adminOpenBtn.addEventListener("click", function(){
     loginError.textContent = "";
     document.getElementById("adminPass").value = "";
-    if(adminPasswordHash){
+    document.getElementById("adminToken").value = "";
+    if(adminPasswordHash && adminActionsToken){
       openPanel();
     }else{
       loginOverlay.classList.add("is-open");
@@ -1301,20 +1300,24 @@
       return;
     }
     const password = document.getElementById("adminPass").value;
+    const token = document.getElementById("adminToken").value.trim();
     if(!password){ loginError.textContent = "Enter the admin password."; return; }
+    if(!token){ loginError.textContent = "Enter the GitHub Actions token."; return; }
     const submitBtn = loginForm.querySelector("button[type=submit]");
     submitBtn.disabled = true;
     loginError.textContent = "Checking…";
     try{
       const hash = await sha256Hex(password);
       const sinceISO = new Date().toISOString();
-      await dispatchWorkflow({ action_type: "ping", password_hash: hash });
-      const conclusion = await awaitRunConclusion(sinceISO);
+      await dispatchWorkflow(token, { action_type: "ping", password_hash: hash });
+      const conclusion = await awaitRunConclusion(token, sinceISO);
       if(conclusion !== "success"){
         loginError.textContent = "Incorrect admin password.";
         return;
       }
       adminPasswordHash = hash;
+      adminActionsToken = token;
+      document.getElementById("adminToken").value = "";
       loginError.textContent = "";
       loginOverlay.classList.remove("is-open");
       openPanel();
