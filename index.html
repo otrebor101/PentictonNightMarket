@@ -836,10 +836,10 @@
   <div class="modal-box">
     <button class="modal-close" id="loginCloseBtn" aria-label="Close">&times;</button>
     <h3>Admin login</h3>
-    <p class="modal-sub">Manage the market updates banner and photo stack. Changes are made by a GitHub Action running on GitHub's servers &mdash; enter a GitHub Actions token scoped to this repo to authorize a change.</p>
+    <p class="modal-sub">Manage the market updates banner and photo stack. Changes are written straight to the repo &mdash; enter a GitHub token scoped to this repo (Contents: Read and write) to authorize a change.</p>
     <form id="loginForm">
       <div class="field">
-        <label for="adminToken">GitHub Actions token</label>
+        <label for="adminToken">GitHub token</label>
         <input type="password" id="adminToken" autocomplete="off" placeholder="github_pat_...">
       </div>
       <div class="modal-error" id="loginError"></div>
@@ -943,32 +943,34 @@
   const GH_UPDATES_PATH  = "data/market-updates.json";
   const GH_PHOTOS_PATH   = "data/photos.json";
   const GH_IMAGES_DIR    = "images";
-  const GH_WORKFLOW_FILE = "admin-update.yml"; // filename under .github/workflows/
 
   // ------------------------------------------
-  // HOW THIS WORKS (zero servers of your own):
+  // HOW THIS WORKS (zero servers of your own, no GitHub Actions involved):
   // - Every visitor's browser reads the updates + photo stack straight from the
   //   raw files on GitHub — no auth needed for that, it's a public GET.
-  // - The admin panel never writes to the repo directly. Instead it triggers a
-  //   GitHub Actions workflow (.github/workflows/admin-update.yml), which runs
-  //   on GitHub's own servers and does the actual file edit + commit. That
-  //   removes the client-side "sha does not match" race entirely, since the
-  //   workflow always starts from a fresh checkout and runs are serialized.
-  // - Triggering that workflow requires a GitHub token. It is NOT stored
-  //   anywhere in this file or this repo, in any form. You (the admin) paste
-  //   a fine-grained PAT into the login form each time you use the panel; it
-  //   lives only in this tab's memory for that session and is discarded when
-  //   the tab closes or the page reloads. Use a token scoped to ONLY this
-  //   repo, with ONLY the "Actions: Read and write" permission — that token
-  //   IS the login: GitHub itself rejects the dispatch if it's wrong,
-  //   missing, expired, or under-scoped, so there's no separate password to
-  //   manage or leak.
+  // - The admin panel writes directly to the repo using GitHub's Contents API:
+  //   it GETs the current file (to get its sha), then PUTs the new content
+  //   back with that sha, which creates a commit on GH_BRANCH. Instant — no
+  //   workflow to dispatch, no run to poll for, and nothing that can be
+  //   blocked by an Actions outage or an account billing lock.
+  // - This requires a GitHub token. It is NOT stored anywhere in this file or
+  //   this repo, in any form. You (the admin) paste a fine-grained PAT into
+  //   the login form each time you use the panel; it lives only in this
+  //   tab's memory for that session and is discarded when the tab closes or
+  //   the page reloads. Use a token scoped to ONLY this repo, with ONLY the
+  //   "Contents: Read and write" permission — that token IS the login:
+  //   GitHub itself rejects the request if it's wrong, missing, expired, or
+  //   under-scoped, so there's no separate password to manage or leak.
+  // - Trade-off vs. the Actions-workflow approach: if two people save at the
+  //   exact same moment, the second write can fail with a 409 (sha
+  //   mismatch) and needs a retry. For a single admin clicking a button
+  //   occasionally, this basically never comes up.
   //
   // ONE-TIME SETUP — see README for the full walkthrough:
   //   1. Push this repo to GitHub, turn on Pages.
   //   2. Fill in GH_OWNER / GH_REPO above.
   //   3. Create a fine-grained PAT scoped to ONLY this repo, ONLY
-  //      "Actions: Read and write" permission. Give it a real expiration
+  //      "Contents: Read and write" permission. Give it a real expiration
   //      date and keep it somewhere private (a password manager) — you'll
   //      paste it into the admin login form each time you use the panel,
   //      not into this file.
@@ -988,9 +990,6 @@
   function rawUrl(filePath){
     return "https://raw.githubusercontent.com/" + GH_OWNER + "/" + GH_REPO + "/" + GH_BRANCH + "/" + filePath + "?t=" + Date.now();
   }
-  function actionsApiBase(){
-    return "https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO + "/actions";
-  }
   function contentsApiUrl(filePath){
     return "https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO + "/contents/" + filePath;
   }
@@ -1002,8 +1001,6 @@
     d.textContent = str == null ? "" : String(str);
     return d.innerHTML;
   }
-  function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
-
   // ---------- PUBLIC READS (no token) ----------
   async function loadUpdates(){
     if(!isConfigured()) return DEFAULT_UPDATES;
@@ -1040,63 +1037,81 @@
     }
   }
 
-  // ---------- WORKFLOW TRIGGER (needs the Actions-only token, entered at login) ----------
-  async function dispatchWorkflow(token, inputs){
-    const res = await fetch(actionsApiBase() + "/workflows/" + GH_WORKFLOW_FILE + "/dispatches", {
-      method: "POST",
+  // ---------- DIRECT CONTENTS API WRITES (needs a Contents: Read and write token, entered at login) ----------
+  // No GitHub Actions involved at all — the browser reads the file's current sha,
+  // then PUTs the new content straight back with that sha. Instant, no polling,
+  // and immune to any Actions outage or billing lock on the account.
+  function utf8ToBase64(str){
+    return btoa(unescape(encodeURIComponent(str)));
+  }
+
+  async function getJsonFile(token, path){
+    const res = await fetch(contentsApiUrl(path) + "?ref=" + GH_BRANCH, {
+      headers: { Authorization: "Bearer " + token, Accept: "application/vnd.github+json" }
+    });
+    if(res.status === 401 || res.status === 403){
+      throw new Error("That token was rejected — check it's a fine-grained PAT with 'Contents: Read and write' access to this repo, and hasn't expired.");
+    }
+    if(res.status === 404){
+      throw new Error("Couldn't find " + path + " in the repo — check it exists on the " + GH_BRANCH + " branch.");
+    }
+    if(!res.ok){
+      throw new Error("GitHub error " + res.status + " reading " + path + ".");
+    }
+    const meta = await res.json();
+    const decoded = decodeURIComponent(escape(atob(meta.content.replace(/\n/g, ""))));
+    let parsed;
+    try{ parsed = JSON.parse(decoded); }catch(e){ throw new Error(path + " isn't valid JSON right now."); }
+    return { sha: meta.sha, data: parsed };
+  }
+
+  async function putJsonFile(token, path, data, sha, message){
+    const res = await fetch(contentsApiUrl(path), {
+      method: "PUT",
       headers: {
         Authorization: "Bearer " + token,
         Accept: "application/vnd.github+json",
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ ref: GH_BRANCH, inputs: inputs })
+      body: JSON.stringify({
+        message: message,
+        content: utf8ToBase64(JSON.stringify(data, null, 2) + "\n"),
+        sha: sha,
+        branch: GH_BRANCH
+      })
     });
     if(res.status === 401 || res.status === 403){
-      throw new Error("That token was rejected — check it's a fine-grained PAT with 'Actions: Read and write' access to this repo, and hasn't expired.");
+      throw new Error("That token was rejected — check it's a fine-grained PAT with 'Contents: Read and write' access to this repo, and hasn't expired.");
     }
-    if(res.status === 404){
-      throw new Error("Workflow not found — check GH_WORKFLOW_FILE matches the file in .github/workflows/, or the token doesn't have access to this repo.");
+    if(res.status === 409){
+      throw new Error("The file changed on GitHub in between read and write — try again.");
     }
     if(!res.ok){
-      throw new Error("GitHub error " + res.status + " triggering the workflow.");
+      throw new Error("GitHub error " + res.status + " writing " + path + ".");
     }
   }
 
-  async function awaitRunConclusion(token, sinceISO){
-    const deadline = Date.now() + 90000;
-    const since = new Date(sinceISO).getTime();
-    let sawRun = false;
-    while(Date.now() < deadline){
-      await sleep(1500);
-      let data;
-      try{
-        const res = await fetch(actionsApiBase() + "/workflows/" + GH_WORKFLOW_FILE + "/runs?event=workflow_dispatch&per_page=5", {
-          headers: { Authorization: "Bearer " + token, Accept: "application/vnd.github+json" }
-        });
-        if(!res.ok) continue;
-        data = await res.json();
-      }catch(e){ continue; }
-
-      const candidate = (data.workflow_runs || []).find(function(r){ return new Date(r.created_at).getTime() >= since - 5000; });
-      if(!candidate) continue;
-      sawRun = true;
-      if(candidate.status === "completed"){
-        return candidate.conclusion; // "success" | "failure" | "cancelled" | ...
-      }
+  async function checkTokenWorks(token){
+    const res = await fetch("https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO, {
+      headers: { Authorization: "Bearer " + token, Accept: "application/vnd.github+json" }
+    });
+    if(res.status === 401 || res.status === 403){
+      throw new Error("That token was rejected — check it's a fine-grained PAT with 'Contents: Read and write' access to this repo, and hasn't expired.");
     }
-    if(sawRun) throw new Error("Still waiting on GitHub Actions to finish — check the repo's Actions tab, it may just be slow to start.");
-    throw new Error("Couldn't find the triggered run — check the repo's Actions tab directly.");
+    if(res.status === 404){
+      throw new Error("Repo not found for this token — check GH_OWNER/GH_REPO and that the token is scoped to this repo.");
+    }
+    if(!res.ok){
+      throw new Error("GitHub error " + res.status + " checking the token.");
+    }
   }
 
-  async function runAdminAction(actionType, extraInputs){
+  async function runAdminAction(actionType, mutate){
     if(!adminActionsToken) throw new Error("Not logged in.");
-    const sinceISO = new Date().toISOString();
-    const inputs = Object.assign({ action_type: actionType }, extraInputs || {});
-    await dispatchWorkflow(adminActionsToken, inputs);
-    const conclusion = await awaitRunConclusion(adminActionsToken, sinceISO);
-    if(conclusion !== "success"){
-      throw new Error("The update was rejected — open the repo's Actions tab for details.");
-    }
+    const path = actionType === "update_photos" ? GH_PHOTOS_PATH : GH_UPDATES_PATH;
+    const current = await getJsonFile(adminActionsToken, path);
+    const next = mutate(current.data);
+    await putJsonFile(adminActionsToken, path, next, current.sha, "Admin update: " + actionType);
   }
 
   // ---------- RENDERING ----------
@@ -1142,7 +1157,8 @@
         btn.disabled = true;
         updateFormError.textContent = "Publishing…";
         try{
-          await runAdminAction("delete", { update_id: btn.getAttribute("data-id") });
+          const idToRemove = btn.getAttribute("data-id");
+          await runAdminAction("delete", function(list){ return list.filter(function(u){ return u.id !== idToRemove; }); });
           const list = await loadUpdates();
           updateFormError.textContent = "";
           renderAdminList(list);
@@ -1226,7 +1242,8 @@
     btn.disabled = true;
     photoFormError.textContent = "Publishing…";
     try{
-      await runAdminAction("update_photos", { photos_json: JSON.stringify(editorPhotos) });
+      const photosToSave = editorPhotos.map(function(p){ return Object.assign({}, p); });
+      await runAdminAction("update_photos", function(){ return photosToSave; });
       const photos = await loadPhotos();
       renderPolaroidStack(photos);
       photoFormError.textContent = "";
@@ -1278,18 +1295,12 @@
       return;
     }
     const token = document.getElementById("adminToken").value.trim();
-    if(!token){ loginError.textContent = "Enter the GitHub Actions token."; return; }
+    if(!token){ loginError.textContent = "Enter the GitHub token."; return; }
     const submitBtn = loginForm.querySelector("button[type=submit]");
     submitBtn.disabled = true;
     loginError.textContent = "Checking…";
     try{
-      const sinceISO = new Date().toISOString();
-      await dispatchWorkflow(token, { action_type: "ping" });
-      const conclusion = await awaitRunConclusion(token, sinceISO);
-      if(conclusion !== "success"){
-        loginError.textContent = "That token was rejected by the workflow — check it's scoped to this repo.";
-        return;
-      }
+      await checkTokenWorks(token);
       adminActionsToken = token;
       document.getElementById("adminToken").value = "";
       loginError.textContent = "";
@@ -1335,7 +1346,7 @@
     submitBtn.disabled = true;
     updateFormError.textContent = "Publishing…";
     try{
-      await runAdminAction("publish", { text: text });
+      await runAdminAction("publish", function(list){ return list.concat([{ id: "u-" + Date.now(), text: text }]); });
       const list = await loadUpdates();
       textEl.value = "";
       updateFormError.textContent = "";
@@ -1352,7 +1363,7 @@
     updateFormError.textContent = "Publishing…";
     clearUpdatesBtn.disabled = true;
     try{
-      await runAdminAction("clear", {});
+      await runAdminAction("clear", function(){ return []; });
       renderAdminList([]);
       renderBanner([]);
       updateFormError.textContent = "";
