@@ -656,6 +656,19 @@
   </div>
 </div>
 
+<!-- DEPLOY LIGHT: purely local/time-based, not tied to any fetch or polling.
+     Preplaced and hidden; shown instantly the moment a save succeeds, via
+     localStorage so it survives refreshes on this browser. -->
+<div class="alert deploy-light-strip" id="deployLightStrip" hidden>
+  <div class="wrap alert-inner" style="justify-content:space-between;align-items:center;">
+    <div style="display:flex;gap:14px;align-items:flex-start;">
+      <div class="alert-dot" id="deployDot" style="margin-top:7px;"></div>
+      <div><b>Heads up:</b> <span id="deployLabel"></span></div>
+    </div>
+    <button type="button" id="deployDismissBtn" style="background:none;border:none;cursor:pointer;color:rgba(32,41,31,0.45);font-size:1.1rem;line-height:1;padding:0 0 0 12px;">&times;</button>
+  </div>
+</div>
+
 <section class="intro">
   <div class="wrap intro-grid">
     <div>
@@ -855,7 +868,7 @@
   <div class="modal-box wide">
     <button class="modal-close" id="panelCloseBtn" aria-label="Close">&times;</button>
     <h3>Market updates</h3>
-    <p class="modal-sub">These appear as a banner under the header for every visitor. Changes save straight to GitHub &mdash; this page (and every visitor's browser) needs a refresh to show them.</p>
+    <p class="modal-sub">These appear as a banner under the header for every visitor. Changes save straight to GitHub, but the live site takes a bit to catch up &mdash; watch the deploy light banner (bottom of your screen once you save) for when it's safe to refresh.</p>
 
     <div class="admin-updates-list" id="adminUpdatesList"></div>
     <button type="button" class="btn-danger-ghost" id="clearUpdatesBtn">Clear all updates</button>
@@ -969,11 +982,14 @@
   //   occasionally, this basically never comes up.
   // - Even though the commit itself lands instantly, the LIVE SITE doesn't
   //   necessarily reflect it right away: GitHub Pages has to rebuild and
-  //   redeploy (often 20-60+ seconds), and raw.githubusercontent.com sits
-  //   behind a CDN that can lag a short while too. So after a save, this
-  //   panel polls the raw file for a bit and only tells you it's "live"
-  //   once it can actually see the change — instead of just assuming a
-  //   refresh will show it.
+  //   redeploy, and that can take anywhere from a few seconds to several
+  //   minutes depending on GitHub's shared runner load — there's no
+  //   reliable way to know the real number from the browser, so this panel
+  //   doesn't try to poll for it. Instead, the moment a save succeeds it
+  //   lights up a small "deploy light" banner (stored in this browser's
+  //   localStorage, so it survives refreshes) that fades from red to
+  //   yellow to green over a few minutes as a rough, honest guide for when
+  //   to refresh — not a guarantee, just a nudge.
   //
   // ONE-TIME SETUP — see README for the full walkthrough:
   //   1. Push this repo to GitHub, turn on Pages.
@@ -1129,49 +1145,71 @@
     const current = await getJsonFile(adminActionsToken, path);
     const next = mutate(current.data);
     await putJsonFile(adminActionsToken, path, next, current.sha, "Admin update: " + actionType);
+    markDeployStarted();
     return { path: path, data: next };
   }
 
-  // Polls the public raw file after a save until it actually reflects the
-  // change (or times out). Accounts for GitHub Pages rebuild + CDN lag,
-  // which is real (often 20-60+ seconds) and separate from the commit
-  // itself landing instantly via the Contents API.
-  function waitForLive(path, expectedData, onTick){
-    const deadline = Date.now() + 75000; // ~75s ceiling
-    const stepMs = 3000;
-    return new Promise(function(resolve){
-      (function poll(){
-        const secsLeft = Math.max(0, Math.round((deadline - Date.now()) / 1000));
-        if(onTick) onTick(secsLeft);
-        if(Date.now() > deadline){ resolve(false); return; }
-        fetch(rawUrl(path), { cache: "no-store" })
-          .then(function(res){ return res.ok ? res.json() : null; })
-          .then(function(data){
-            if(data && JSON.stringify(data) === JSON.stringify(expectedData)){
-              resolve(true);
-            }else{
-              setTimeout(poll, stepMs);
-            }
-          })
-          .catch(function(){ setTimeout(poll, stepMs); });
-      })();
-    });
-  }
-
-  async function saveAndReportLive(statusEl, actionType, mutate, pendingLabel){
+  async function saveAndAnnounce(statusEl, actionType, mutate, pendingLabel){
     setStatus(statusEl, pendingLabel + "…", "pending");
     const result = await runAdminAction(actionType, mutate);
-    setStatus(statusEl, "Saved to GitHub — waiting for it to go live…", "pending");
-    const live = await waitForLive(result.path, result.data, function(secsLeft){
-      setStatus(statusEl, "Saved to GitHub — waiting for it to go live (up to " + secsLeft + "s left)…", "pending");
-    });
-    if(live){
-      setStatus(statusEl, "✓ Live now — refresh the page to see it.", "success");
-    }else{
-      setStatus(statusEl, "✓ Saved to GitHub. It's taking longer than usual to deploy (Pages rebuild + CDN lag) — check back in a minute or two.", "success");
-    }
+    setStatus(statusEl, "✓ Saved and pushed to GitHub. Watch the deploy light on the site for when to refresh.", "success");
     return result;
   }
+
+  // ---------- DEPLOY LIGHT (local, time-based — no polling) ----------
+  // Deploy timing from the browser's perspective is unknowable in advance
+  // (it's ruled by GitHub's shared runner load), so rather than guess via
+  // repeated fetches, this just tracks "time since last push" in
+  // localStorage and fades a light from red -> yellow -> green as a rough
+  // guide. It's honest about being a guide, not a guarantee.
+  const DEPLOY_KEY = "pnm_deploy_started_at";
+  const DEPLOY_WINDOW_MS = 6 * 60 * 1000; // stop showing after ~6 minutes
+  let deployLightTimer = null;
+
+  function markDeployStarted(){
+    localStorage.setItem(DEPLOY_KEY, String(Date.now()));
+    renderDeployLight();
+    if(!deployLightTimer) deployLightTimer = setInterval(renderDeployLight, 5000);
+  }
+
+  function renderDeployLight(){
+    const strip = document.getElementById("deployLightStrip");
+    const startedRaw = localStorage.getItem(DEPLOY_KEY);
+    if(!startedRaw){
+      strip.hidden = true;
+      return;
+    }
+    const elapsed = Date.now() - Number(startedRaw);
+    if(elapsed > DEPLOY_WINDOW_MS){
+      localStorage.removeItem(DEPLOY_KEY);
+      strip.hidden = true;
+      if(deployLightTimer){ clearInterval(deployLightTimer); deployLightTimer = null; }
+      return;
+    }
+    strip.hidden = false;
+    const dot = document.getElementById("deployDot");
+    const label = document.getElementById("deployLabel");
+    if(elapsed < 60000){
+      dot.style.background = "var(--peach-coral)";
+      label.textContent = "an update was just pushed — GitHub is building the site now. Refreshing right away probably won't show it yet.";
+    }else if(elapsed < 3 * 60000){
+      dot.style.background = "var(--gold-light)";
+      label.textContent = "still likely deploying — worth a refresh, but it may take a couple more minutes.";
+    }else{
+      dot.style.background = "var(--lake-teal)";
+      label.textContent = "should be live by now for most pushes — go ahead and refresh. (Occasionally GitHub takes longer — if you still don't see it, give it a bit more time.)";
+    }
+  }
+
+  document.getElementById("deployDismissBtn").addEventListener("click", function(){
+    localStorage.removeItem(DEPLOY_KEY);
+    document.getElementById("deployLightStrip").hidden = true;
+    if(deployLightTimer){ clearInterval(deployLightTimer); deployLightTimer = null; }
+  });
+
+  // restore state on load (e.g. admin refreshed mid-wait)
+  renderDeployLight();
+  if(localStorage.getItem(DEPLOY_KEY)) deployLightTimer = setInterval(renderDeployLight, 5000);
 
   // ---------- RENDERING ----------
   function renderBanner(list){
@@ -1216,7 +1254,7 @@
         btn.disabled = true;
         try{
           const idToRemove = btn.getAttribute("data-id");
-          await saveAndReportLive(updateFormError, "delete", function(list){ return list.filter(function(u){ return u.id !== idToRemove; }); }, "Removing");
+          await saveAndAnnounce(updateFormError, "delete", function(list){ return list.filter(function(u){ return u.id !== idToRemove; }); }, "Removing");
           const list = await loadUpdates();
           renderAdminList(list);
         }catch(e){
@@ -1298,7 +1336,7 @@
     btn.disabled = true;
     try{
       const photosToSave = editorPhotos.map(function(p){ return Object.assign({}, p); });
-      await saveAndReportLive(photoFormError, "update_photos", function(){ return photosToSave; }, "Saving");
+      await saveAndAnnounce(photoFormError, "update_photos", function(){ return photosToSave; }, "Saving");
     }catch(e){
       setStatus(photoFormError, e.message, "error");
     }finally{
@@ -1397,7 +1435,7 @@
     const submitBtn = updateForm.querySelector("button[type=submit]");
     submitBtn.disabled = true;
     try{
-      await saveAndReportLive(updateFormError, "publish", function(list){ return list.concat([{ id: "u-" + Date.now(), text: text }]); }, "Publishing");
+      await saveAndAnnounce(updateFormError, "publish", function(list){ return list.concat([{ id: "u-" + Date.now(), text: text }]); }, "Publishing");
       const list = await loadUpdates();
       textEl.value = "";
       renderAdminList(list);
@@ -1411,7 +1449,7 @@
   clearUpdatesBtn.addEventListener("click", async function(){
     clearUpdatesBtn.disabled = true;
     try{
-      await saveAndReportLive(updateFormError, "clear", function(){ return []; }, "Clearing");
+      await saveAndAnnounce(updateFormError, "clear", function(){ return []; }, "Clearing");
       renderAdminList([]);
     }catch(e){
       setStatus(updateFormError, e.message, "error");
