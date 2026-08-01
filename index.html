@@ -967,6 +967,13 @@
   //   exact same moment, the second write can fail with a 409 (sha
   //   mismatch) and needs a retry. For a single admin clicking a button
   //   occasionally, this basically never comes up.
+  // - Even though the commit itself lands instantly, the LIVE SITE doesn't
+  //   necessarily reflect it right away: GitHub Pages has to rebuild and
+  //   redeploy (often 20-60+ seconds), and raw.githubusercontent.com sits
+  //   behind a CDN that can lag a short while too. So after a save, this
+  //   panel polls the raw file for a bit and only tells you it's "live"
+  //   once it can actually see the change — instead of just assuming a
+  //   refresh will show it.
   //
   // ONE-TIME SETUP — see README for the full walkthrough:
   //   1. Push this repo to GitHub, turn on Pages.
@@ -1122,6 +1129,48 @@
     const current = await getJsonFile(adminActionsToken, path);
     const next = mutate(current.data);
     await putJsonFile(adminActionsToken, path, next, current.sha, "Admin update: " + actionType);
+    return { path: path, data: next };
+  }
+
+  // Polls the public raw file after a save until it actually reflects the
+  // change (or times out). Accounts for GitHub Pages rebuild + CDN lag,
+  // which is real (often 20-60+ seconds) and separate from the commit
+  // itself landing instantly via the Contents API.
+  function waitForLive(path, expectedData, onTick){
+    const deadline = Date.now() + 75000; // ~75s ceiling
+    const stepMs = 3000;
+    return new Promise(function(resolve){
+      (function poll(){
+        const secsLeft = Math.max(0, Math.round((deadline - Date.now()) / 1000));
+        if(onTick) onTick(secsLeft);
+        if(Date.now() > deadline){ resolve(false); return; }
+        fetch(rawUrl(path), { cache: "no-store" })
+          .then(function(res){ return res.ok ? res.json() : null; })
+          .then(function(data){
+            if(data && JSON.stringify(data) === JSON.stringify(expectedData)){
+              resolve(true);
+            }else{
+              setTimeout(poll, stepMs);
+            }
+          })
+          .catch(function(){ setTimeout(poll, stepMs); });
+      })();
+    });
+  }
+
+  async function saveAndReportLive(statusEl, actionType, mutate, pendingLabel){
+    setStatus(statusEl, pendingLabel + "…", "pending");
+    const result = await runAdminAction(actionType, mutate);
+    setStatus(statusEl, "Saved to GitHub — waiting for it to go live…", "pending");
+    const live = await waitForLive(result.path, result.data, function(secsLeft){
+      setStatus(statusEl, "Saved to GitHub — waiting for it to go live (up to " + secsLeft + "s left)…", "pending");
+    });
+    if(live){
+      setStatus(statusEl, "✓ Live now — refresh the page to see it.", "success");
+    }else{
+      setStatus(statusEl, "✓ Saved to GitHub. It's taking longer than usual to deploy (Pages rebuild + CDN lag) — check back in a minute or two.", "success");
+    }
+    return result;
   }
 
   // ---------- RENDERING ----------
@@ -1165,12 +1214,10 @@
     Array.from(el.querySelectorAll(".removeUpdateBtn")).forEach(function(btn){
       btn.addEventListener("click", async function(){
         btn.disabled = true;
-        setStatus(updateFormError, "Removing…", "pending");
         try{
           const idToRemove = btn.getAttribute("data-id");
-          await runAdminAction("delete", function(list){ return list.filter(function(u){ return u.id !== idToRemove; }); });
+          await saveAndReportLive(updateFormError, "delete", function(list){ return list.filter(function(u){ return u.id !== idToRemove; }); }, "Removing");
           const list = await loadUpdates();
-          setStatus(updateFormError, "✓ Removed — refresh the page to update the live banner.", "success");
           renderAdminList(list);
         }catch(e){
           setStatus(updateFormError, e.message, "error");
@@ -1249,11 +1296,9 @@
       return;
     }
     btn.disabled = true;
-    setStatus(photoFormError, "Saving…", "pending");
     try{
       const photosToSave = editorPhotos.map(function(p){ return Object.assign({}, p); });
-      await runAdminAction("update_photos", function(){ return photosToSave; });
-      setStatus(photoFormError, "✓ Saved — refresh the page to see the new photo stack.", "success");
+      await saveAndReportLive(photoFormError, "update_photos", function(){ return photosToSave; }, "Saving");
     }catch(e){
       setStatus(photoFormError, e.message, "error");
     }finally{
@@ -1351,12 +1396,10 @@
     }
     const submitBtn = updateForm.querySelector("button[type=submit]");
     submitBtn.disabled = true;
-    setStatus(updateFormError, "Publishing…", "pending");
     try{
-      await runAdminAction("publish", function(list){ return list.concat([{ id: "u-" + Date.now(), text: text }]); });
+      await saveAndReportLive(updateFormError, "publish", function(list){ return list.concat([{ id: "u-" + Date.now(), text: text }]); }, "Publishing");
       const list = await loadUpdates();
       textEl.value = "";
-      setStatus(updateFormError, "✓ Published — refresh the page to see it live.", "success");
       renderAdminList(list);
     }catch(err){
       setStatus(updateFormError, err.message, "error");
@@ -1366,12 +1409,10 @@
   });
 
   clearUpdatesBtn.addEventListener("click", async function(){
-    setStatus(updateFormError, "Clearing…", "pending");
     clearUpdatesBtn.disabled = true;
     try{
-      await runAdminAction("clear", function(){ return []; });
+      await saveAndReportLive(updateFormError, "clear", function(){ return []; }, "Clearing");
       renderAdminList([]);
-      setStatus(updateFormError, "✓ Cleared — refresh the page to update the live banner.", "success");
     }catch(e){
       setStatus(updateFormError, e.message, "error");
     }finally{
