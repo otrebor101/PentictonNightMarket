@@ -1,37 +1,37 @@
 [
   {
     "id": "p1",
-    "src": "market-stalls.jpg",
+    "src": "market-stalls.webp",
     "caption": "Thursday night market fun!",
     "rot": -4
   },
   {
     "id": "p2",
-    "src": "red-tents.jpg",
+    "src": "red-tents.webp",
     "caption": "Grab some grub on the go!",
     "rot": 3
   },
   {
     "id": "p3",
-    "src": "blue-tent-crafts.jpg",
+    "src": "blue-tent-crafts.webp",
     "caption": "Market night, music time!",
     "rot": -2
   },
   {
     "id": "p4",
-    "src": "lit-trees.jpg",
+    "src": "lit-trees.webp",
     "caption": "Summer air, lake breeze!",
     "rot": 5
   },
   {
     "id": "p5",
-    "src": "string-lights.jpg",
+    "src": "string-lights.webp",
     "caption": "The crowd rolls in at ~6pm!",
     "rot": -3
   },
   {
     "id": "p-1785555795277",
-    "src": "lights-bokeh.jpg",
+    "src": "lights-bokeh.webp",
     "caption": "Bring the kids! Bring the dog!",
     "rot": -4
   }

@@ -633,6 +633,16 @@
     font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:0.06em;font-size:0.8rem;
   }
   .btn-ghost-add:hover{background:rgba(47,110,107,0.08);}
+  .btn-ghost-add.is-busy{opacity:0.6;pointer-events:none;}
+  .photo-upload-box{margin-bottom:16px;}
+  .photo-upload-box .modal-error{margin-top:8px;}
+  .photo-upload-thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+  .photo-upload-thumbs .thumb{width:44px;height:44px;border-radius:3px;overflow:hidden;position:relative;background:var(--dusk-navy-deep);}
+  .photo-upload-thumbs .thumb img{width:100%;height:100%;object-fit:cover;}
+  .photo-upload-thumbs .thumb .pct{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(15,29,46,0.55);color:#fff;font-size:0.65rem;font-weight:700;
+  }
   .divider-line{border:none;border-top:1px solid rgba(32,41,31,0.14);margin:22px 0;}
   .btn-danger-ghost{
     border:1.5px solid rgba(228,103,75,0.5);color:var(--peach-coral);
@@ -744,16 +754,16 @@
     </div>
     <div class="gallery-grid">
       <a class="g1" href="#" onclick="return false;">
-        <img src="images/red-tents.jpg" alt="Vendor tents and market crowd at the Penticton Night Market, Gyro Park">
+        <img src="images/red-tents.webp" alt="Vendor tents and market crowd at the Penticton Night Market, Gyro Park" loading="lazy" decoding="async">
       </a>
       <a class="g2" href="#" onclick="return false;">
-        <img src="images/blue-tent-crafts.jpg" alt="Market-goers browsing a local craft vendor's stall at dusk at Gyro Park">
+        <img src="images/blue-tent-crafts.webp" alt="Market-goers browsing a local craft vendor's stall at dusk at Gyro Park" loading="lazy" decoding="async">
       </a>
       <a class="g3" href="#" onclick="return false;">
-        <img src="images/lit-trees.jpg" alt="Trees strung with warm lights over the park at the Penticton Night Market">
+        <img src="images/lit-trees.webp" alt="Trees strung with warm lights over the park at the Penticton Night Market" loading="lazy" decoding="async">
       </a>
       <a class="g4" href="#" onclick="return false;">
-        <img src="images/lights-bokeh.jpg" alt="String lights glowing over the market at Gyro Park at dusk">
+        <img src="images/lights-bokeh.webp" alt="String lights glowing over the market at Gyro Park at dusk" loading="lazy" decoding="async">
       </a>
     </div>
   </div>
@@ -933,10 +943,16 @@
     <hr class="divider-line">
 
     <h3 style="font-size:1.1rem;">Photo stack</h3>
-    <p class="modal-sub" style="margin-bottom:14px;">The rotating photos in the hero. Reorder, edit captions, remove, or swap in a different photo &mdash; to use a brand-new image, upload it into the repo's <code>images/</code> folder first, then it'll show up in the dropdown here.</p>
+    <p class="modal-sub" style="margin-bottom:14px;">The rotating photos in the hero. Reorder, edit captions, remove, or swap in a different photo, or upload a brand-new one below &mdash; it's converted to WebP right in your browser so it loads fast on mobile, then pushed straight into the repo's <code>images/</code> folder.</p>
+
+    <div class="photo-upload-box">
+      <label class="btn-ghost-add" for="photoUploadInput" id="photoUploadLabel" style="cursor:pointer;display:inline-block;">+ Upload new photo</label>
+      <input type="file" id="photoUploadInput" accept="image/*" multiple style="display:none;">
+      <div class="modal-error" id="photoUploadStatus"></div>
+    </div>
 
     <div class="photo-editor-list" id="photoEditorList"></div>
-    <button type="button" class="btn-ghost-add" id="addPhotoBtn">+ Add photo to stack</button>
+    <button type="button" class="btn-ghost-add" id="addPhotoBtn">+ Add existing image to stack</button>
 
     <div class="modal-error" id="photoFormError"></div>
     <button type="button" class="btn-primary btn-block" id="savePhotosBtn" style="margin-top:14px;">Save photo stack</button>
@@ -1048,11 +1064,11 @@
     { id: "default-1", text: "No market on Aug 6 for Peach Fest, and no market on June 26 for the Peach City Beach Cruise. Check Instagram the afternoon of each market for weather or air-quality calls." }
   ];
   const DEFAULT_PHOTOS = [
-    { id: "p1", src: "market-stalls.jpg", caption: "the stalls light up", rot: -4 },
-    { id: "p2", src: "red-tents.jpg", caption: "the crowd rolls in ~7pm", rot: 3 },
-    { id: "p3", src: "blue-tent-crafts.jpg", caption: "market night, as always", rot: -2 },
-    { id: "p4", src: "lit-trees.jpg", caption: "summer air, lake breeze", rot: 5 },
-    { id: "p5", src: "string-lights.jpg", caption: "bandshell lights up", rot: -3 }
+    { id: "p1", src: "market-stalls.webp", caption: "the stalls light up", rot: -4 },
+    { id: "p2", src: "red-tents.webp", caption: "the crowd rolls in ~7pm", rot: 3 },
+    { id: "p3", src: "blue-tent-crafts.webp", caption: "market night, as always", rot: -2 },
+    { id: "p4", src: "lit-trees.webp", caption: "summer air, lake breeze", rot: 5 },
+    { id: "p5", src: "string-lights.webp", caption: "bandshell lights up", rot: -3 }
   ];
 
   function rawUrl(filePath){
@@ -1152,6 +1168,125 @@
     if(!res.ok){
       throw new Error("GitHub error " + res.status + " writing " + path + ".");
     }
+  }
+
+  // ---- client-side WebP conversion + upload for new photo-stack images ----
+
+  let webpSupported = null;
+  function canEncodeWebp(){
+    if(webpSupported !== null) return webpSupported;
+    const c = document.createElement("canvas");
+    c.width = 1; c.height = 1;
+    webpSupported = c.toDataURL("image/webp").indexOf("data:image/webp") === 0;
+    return webpSupported;
+  }
+
+  function loadImageFromFile(file){
+    return new Promise(function(resolve, reject){
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = function(){ URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error("Couldn't read " + file.name + " as an image.")); };
+      img.src = url;
+    });
+  }
+
+  function canvasToBlob(canvas, type, quality){
+    return new Promise(function(resolve, reject){
+      canvas.toBlob(function(blob){
+        if(blob) resolve(blob); else reject(new Error("Image encoding failed."));
+      }, type, quality);
+    });
+  }
+
+  // Resizes to a sane max dimension for a hero-stack photo, then encodes as
+  // WebP (falling back to JPEG on very old browsers), stepping quality and
+  // size down until the file is comfortably under GitHub's API limit.
+  async function prepareImageForUpload(file){
+    const img = await loadImageFromFile(file);
+    const useWebp = canEncodeWebp();
+    const mime = useWebp ? "image/webp" : "image/jpeg";
+    const ext = useWebp ? "webp" : "jpg";
+    const MAX_BYTES = 1200 * 1024; // stay well under GitHub Contents API's ~1MB request limit
+
+    let maxDim = 1600;
+    let quality = 0.82;
+    let blob = null;
+
+    for(let attempt = 0; attempt < 6; attempt++){
+      const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.max(1, Math.round(img.naturalWidth * scale));
+      const h = Math.max(1, Math.round(img.naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+      blob = await canvasToBlob(canvas, mime, quality);
+      if(blob.size <= MAX_BYTES) break;
+      // still too big: shrink quality first, then dimensions
+      if(quality > 0.5){ quality -= 0.12; }
+      else{ maxDim = Math.round(maxDim * 0.75); }
+    }
+
+    if(!blob) throw new Error("Couldn't process " + file.name + ".");
+    if(blob.size > MAX_BYTES){
+      throw new Error(file.name + " is still too large after compression — try a smaller photo.");
+    }
+
+    const base64 = await new Promise(function(resolve, reject){
+      const reader = new FileReader();
+      reader.onload = function(){ resolve(String(reader.result).split(",")[1]); };
+      reader.onerror = function(){ reject(new Error("Couldn't encode " + file.name + ".")); };
+      reader.readAsDataURL(blob);
+    });
+
+    return { blob: blob, base64: base64, ext: ext, previewUrl: URL.createObjectURL(blob) };
+  }
+
+  function slugifyFilename(name){
+    const base = name.replace(/\.[^/.]+$/, "");
+    let slug = base.toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    if(!slug) slug = "photo";
+    return slug;
+  }
+
+  function uniqueImageFilename(desiredBase, ext, existingNames){
+    const taken = new Set(existingNames.map(function(n){ return n.toLowerCase(); }));
+    let name = desiredBase + "." + ext;
+    if(!taken.has(name.toLowerCase())) return name;
+    let n = 2;
+    while(taken.has((desiredBase + "-" + n + "." + ext).toLowerCase())){ n++; }
+    return desiredBase + "-" + n + "." + ext;
+  }
+
+  async function uploadImageToRepo(token, filename, base64Content, message){
+    const res = await fetch(contentsApiUrl(GH_IMAGES_DIR + "/" + filename), {
+      method: "PUT",
+      headers: {
+        Authorization: "Bearer " + token,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        message: message,
+        content: base64Content,
+        branch: GH_BRANCH
+      })
+    });
+    if(res.status === 401 || res.status === 403){
+      throw new Error("That token was rejected — check it's a fine-grained PAT with 'Contents: Read and write' access to this repo, and hasn't expired.");
+    }
+    if(res.status === 422 || res.status === 409){
+      throw new Error("A file named " + filename + " already exists or the upload conflicted — try again.");
+    }
+    if(!res.ok){
+      let detail = "";
+      try{ detail = (await res.json()).message || ""; }catch(e){}
+      throw new Error("GitHub error " + res.status + " uploading " + filename + (detail ? " (" + detail + ")" : "") + ".");
+    }
+    markDeployStarted();
   }
 
   function setStatus(el, text, kind){
@@ -1269,7 +1404,7 @@
     stack.innerHTML = photos.map(function(p){
       return '<div class="polaroid" style="--rot:' + (p.rot || 0) + 'deg">' +
         '<span class="tape t-left"></span><span class="tape t-right"></span>' +
-        '<div class="polaroid-photo"><img src="images/' + encodeURIComponent(p.src) + '" alt="' + escapeHtml(p.caption) + '"></div>' +
+        '<div class="polaroid-photo"><img src="images/' + encodeURIComponent(p.src) + '" alt="' + escapeHtml(p.caption) + '" decoding="async"></div>' +
         '<div class="polaroid-cap">' + escapeHtml(p.caption) + '</div>' +
         '</div>';
     }).join("");
@@ -1347,6 +1482,53 @@
       });
     });
   }
+
+  const photoUploadInput = document.getElementById("photoUploadInput");
+  const photoUploadLabel = document.getElementById("photoUploadLabel");
+  const photoUploadStatus = document.getElementById("photoUploadStatus");
+
+  photoUploadInput.addEventListener("change", async function(){
+    const files = Array.from(photoUploadInput.files || []);
+    if(!files.length) return;
+    if(!adminActionsToken){
+      setStatus(photoUploadStatus, "Not logged in.", "error");
+      photoUploadInput.value = "";
+      return;
+    }
+
+    photoUploadLabel.classList.add("is-busy");
+    const rots = [-4, 3, -2, 5, -3];
+    let okCount = 0;
+
+    for(let i = 0; i < files.length; i++){
+      const file = files[i];
+      setStatus(photoUploadStatus, "Converting and uploading " + file.name + " (" + (i + 1) + "/" + files.length + ")\u2026", "pending");
+      try{
+        const prepared = await prepareImageForUpload(file);
+        const base = slugifyFilename(file.name);
+        const filename = uniqueImageFilename(base, prepared.ext, availableImageFiles);
+        await uploadImageToRepo(adminActionsToken, filename, prepared.base64, "Admin: upload photo " + filename);
+
+        availableImageFiles = availableImageFiles.concat([filename]);
+        editorPhotos.push({
+          id: "p-" + Date.now() + "-" + i,
+          src: filename,
+          caption: "",
+          rot: rots[editorPhotos.length % rots.length]
+        });
+        okCount++;
+        renderPhotoEditor();
+      }catch(e){
+        setStatus(photoUploadStatus, e.message, "error");
+      }
+    }
+
+    photoUploadLabel.classList.remove("is-busy");
+    photoUploadInput.value = "";
+    if(okCount){
+      setStatus(photoUploadStatus, "\u2713 Uploaded " + okCount + " photo" + (okCount === 1 ? "" : "s") + " to images/ \u2014 add a caption below, then Save photo stack to publish.", "success");
+    }
+  });
 
   document.getElementById("addPhotoBtn").addEventListener("click", function(){
     if(!availableImageFiles.length) return;
